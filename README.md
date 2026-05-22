@@ -5,7 +5,8 @@ A minimalist macOS menu bar timer for keeping track of the task you are working 
 ## Features
 
 - Menu bar status item showing the current task and timer.
-- Floating SwiftUI timer window that can stay above other apps.
+- Compact floating SwiftUI timer window with icon-only controls.
+- Optional always-on-top behavior from the menu bar.
 - Count-up “Free Time” mode.
 - Countdown mode with a configurable duration.
 - Movable and resizable UI window.

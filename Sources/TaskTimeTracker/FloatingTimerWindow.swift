@@ -40,7 +40,7 @@ final class FloatingTimerWindowController: ObservableObject {
 
     private func makePanel() -> NSPanel {
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 220, height: 175),
+            contentRect: NSRect(x: 0, y: 0, width: 220, height: 132),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -49,7 +49,7 @@ final class FloatingTimerWindowController: ObservableObject {
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
-        panel.minSize = NSSize(width: 220, height: 175)
+        panel.minSize = NSSize(width: 220, height: 132)
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView: TimerPanelView(state: state, windowController: self))

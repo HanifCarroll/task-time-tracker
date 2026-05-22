@@ -5,20 +5,19 @@ struct TimerPanelView: View {
     let windowController: FloatingTimerWindowController
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 4) {
             taskEditor
             timerDisplay
-            modePicker
-            controls
+            bottomBar
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .frame(
             minWidth: 220,
             idealWidth: 220,
             maxWidth: .infinity,
-            minHeight: 175,
-            idealHeight: 175,
+            minHeight: 132,
+            idealHeight: 132,
             maxHeight: .infinity
         )
         .background(.regularMaterial)
@@ -30,36 +29,36 @@ struct TimerPanelView: View {
     private var taskEditor: some View {
         TextField("Task", text: $state.taskTitle)
             .textFieldStyle(.plain)
-            .font(.title3.weight(.medium))
+            .font(.callout.weight(.medium))
             .multilineTextAlignment(.center)
     }
 
-    private var modePicker: some View {
-        HStack(spacing: 10) {
+    private var bottomBar: some View {
+        HStack(spacing: 8) {
             Picker("Mode", selection: $state.mode) {
                 ForEach(TimerMode.allCases) { mode in
                     Image(systemName: mode.symbolName).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 82)
 
             if state.mode == .countdown {
                 Stepper("\(state.countdownMinutes)m", value: $state.countdownMinutes, in: 1...240, step: 5)
                     .labelsHidden()
-                    .frame(width: 70)
+                    .frame(width: 52)
             }
 
-            Toggle("Float", isOn: $state.keepOnTop)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .help("Keep window above other apps")
+            Spacer(minLength: 0)
+            controls
         }
     }
 
     private var timerDisplay: some View {
         VStack(spacing: 4) {
             Text(state.formattedTime(state.displaySeconds))
-                .font(.system(size: 64, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.system(size: 54, weight: .bold, design: .rounded).monospacedDigit())
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
                 .frame(maxWidth: .infinity)
@@ -70,11 +69,11 @@ struct TimerPanelView: View {
                     .progressViewStyle(.linear)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 0)
     }
 
     private var controls: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             Button {
                 state.toggleRunning()
             } label: {
@@ -94,10 +93,14 @@ struct TimerPanelView: View {
             .buttonStyle(.bordered)
             .help("Reset")
 
-            Button("Done") {
+            Button {
                 state.completeTask()
+            } label: {
+                Image(systemName: "checkmark")
+                    .frame(width: 16)
             }
             .buttonStyle(.bordered)
+            .help("Complete task")
         }
     }
 }
