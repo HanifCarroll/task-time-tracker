@@ -26,7 +26,7 @@ struct TrackedTask: Identifiable, Equatable {
 final class TimerState: ObservableObject {
     @Published var taskTitle = "Deep work"
     @Published var mode: TimerMode = .countUp
-    @Published var countdownMinutes = 25
+    @Published var countdownSeconds = 25 * 60
     @Published var elapsedSeconds = 0
     @Published var isRunning = false
     @Published var keepOnTop = true
@@ -39,13 +39,13 @@ final class TimerState: ObservableObject {
         case .countUp:
             elapsedSeconds
         case .countdown:
-            max(countdownMinutes * 60 - elapsedSeconds, 0)
+            max(countdownSeconds - elapsedSeconds, 0)
         }
     }
 
     var progress: Double {
         guard mode == .countdown else { return 0 }
-        let total = max(countdownMinutes * 60, 1)
+        let total = max(countdownSeconds, 1)
         return min(Double(elapsedSeconds) / Double(total), 1)
     }
 
@@ -90,6 +90,18 @@ final class TimerState: ObservableObject {
         elapsedSeconds = 0
     }
 
+    func setStoppedDisplaySeconds(_ seconds: Int) {
+        guard !isRunning else { return }
+        let clampedSeconds = max(seconds, 0)
+        switch mode {
+        case .countUp:
+            elapsedSeconds = clampedSeconds
+        case .countdown:
+            countdownSeconds = max(clampedSeconds, 1)
+            elapsedSeconds = 0
+        }
+    }
+
     func completeTask() {
         let trimmed = taskTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = trimmed.isEmpty ? "Untitled task" : trimmed
@@ -98,7 +110,7 @@ final class TimerState: ObservableObject {
         case .countUp:
             secondsSpent = elapsedSeconds
         case .countdown:
-            secondsSpent = min(elapsedSeconds, countdownMinutes * 60)
+            secondsSpent = min(elapsedSeconds, countdownSeconds)
         }
 
         guard secondsSpent > 0 else { return }
@@ -122,7 +134,7 @@ final class TimerState: ObservableObject {
 
     private func tick() {
         elapsedSeconds += 1
-        if mode == .countdown, elapsedSeconds >= countdownMinutes * 60 {
+        if mode == .countdown, elapsedSeconds >= countdownSeconds {
             NSSound.beep()
             pause()
         }

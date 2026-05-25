@@ -4,6 +4,9 @@ struct TimerPanelView: View {
     @ObservedObject var state: TimerState
     let windowController: FloatingTimerWindowController
 
+    @State private var timeEditorText = ""
+    @FocusState private var isTimeEditorFocused: Bool
+
     var body: some View {
         VStack(spacing: 4) {
             taskEditor
@@ -44,12 +47,6 @@ struct TimerPanelView: View {
             .labelsHidden()
             .frame(width: 82)
 
-            if state.mode == .countdown {
-                Stepper("\(state.countdownMinutes)m", value: $state.countdownMinutes, in: 1...240, step: 5)
-                    .labelsHidden()
-                    .frame(width: 52)
-            }
-
             Spacer(minLength: 0)
             controls
         }
@@ -57,12 +54,32 @@ struct TimerPanelView: View {
 
     private var timerDisplay: some View {
         VStack(spacing: 4) {
-            Text(state.formattedTime(state.displaySeconds))
-                .font(.system(size: 54, weight: .bold, design: .rounded).monospacedDigit())
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
-                .frame(maxWidth: .infinity)
-                .contentTransition(.numericText())
+            Group {
+                if state.isRunning {
+                    Text(state.formattedTime(state.displaySeconds))
+                        .contentTransition(.numericText())
+                } else {
+                    TextField("00:00", text: $timeEditorText)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.center)
+                        .focused($isTimeEditorFocused)
+                        .onAppear(perform: syncTimeEditor)
+                        .onSubmit(commitTimeEditor)
+                        .onChange(of: isTimeEditorFocused) { _, focused in
+                            focused ? syncTimeEditor() : commitTimeEditor()
+                        }
+                        .onChange(of: state.displaySeconds) { _, _ in
+                            if !isTimeEditorFocused { syncTimeEditor() }
+                        }
+                        .onChange(of: state.mode) { _, _ in
+                            syncTimeEditor()
+                        }
+                }
+            }
+            .font(.system(size: 54, weight: .bold, design: .rounded).monospacedDigit())
+            .lineLimit(1)
+            .minimumScaleFactor(0.55)
+            .frame(maxWidth: .infinity)
 
             if state.mode == .countdown {
                 ProgressView(value: state.progress)
@@ -70,6 +87,34 @@ struct TimerPanelView: View {
             }
         }
         .padding(.vertical, 0)
+    }
+
+    private func syncTimeEditor() {
+        timeEditorText = state.formattedTime(state.displaySeconds)
+    }
+
+    private func commitTimeEditor() {
+        guard let seconds = parseTimeEditorText(timeEditorText) else {
+            syncTimeEditor()
+            return
+        }
+        state.setStoppedDisplaySeconds(seconds)
+        syncTimeEditor()
+    }
+
+    private func parseTimeEditorText(_ text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count <= 3 else { return nil }
+
+        var seconds = 0
+        for part in parts {
+            guard let value = Int(part), value >= 0 else { return nil }
+            seconds = seconds * 60 + value
+        }
+        return seconds
     }
 
     private var controls: some View {
