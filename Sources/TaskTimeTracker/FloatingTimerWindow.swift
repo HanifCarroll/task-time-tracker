@@ -5,6 +5,10 @@ import SwiftUI
 final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     @Published private(set) var isVisible = false
 
+    private static let defaultSize = NSSize(width: 220, height: 132)
+    private static let savedWidthKey = "FloatingTimerWindow.width"
+    private static let savedHeightKey = "FloatingTimerWindow.height"
+
     private let state: TimerState
     private var panel: NSPanel?
 
@@ -43,24 +47,46 @@ final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowD
         isVisible = false
     }
 
+    func windowDidResize(_ notification: Notification) {
+        guard let panel = notification.object as? NSPanel else { return }
+        saveSize(panel.frame.size)
+    }
+
     private func makePanel() -> NSPanel {
+        let size = savedSize()
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 220, height: 132),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
+        panel.isReleasedWhenClosed = false
         panel.title = "Task Time Tracker"
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
-        panel.minSize = NSSize(width: 220, height: 132)
+        panel.minSize = Self.defaultSize
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
         panel.contentView = NSHostingView(rootView: TimerPanelView(state: state, windowController: self))
         positionInTopRight(panel)
         return panel
+    }
+
+    private func savedSize() -> NSSize {
+        let defaults = UserDefaults.standard
+        let width = defaults.double(forKey: Self.savedWidthKey)
+        let height = defaults.double(forKey: Self.savedHeightKey)
+        guard width >= Self.defaultSize.width, height >= Self.defaultSize.height else {
+            return Self.defaultSize
+        }
+        return NSSize(width: width, height: height)
+    }
+
+    private func saveSize(_ size: NSSize) {
+        UserDefaults.standard.set(size.width, forKey: Self.savedWidthKey)
+        UserDefaults.standard.set(size.height, forKey: Self.savedHeightKey)
     }
 
     private func positionInTopRight(_ panel: NSPanel) {
