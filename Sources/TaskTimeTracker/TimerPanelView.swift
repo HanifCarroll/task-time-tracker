@@ -107,34 +107,55 @@ struct TimerPanelView: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 6) {
-            Button {
-                state.toggleRunning()
-            } label: {
-                Image(systemName: state.isRunning ? "pause.fill" : "play.fill")
-                    .frame(width: 16)
-            }
-            .buttonStyle(.borderedProminent)
-            .keyboardShortcut(.space, modifiers: [])
-            .help(state.isRunning ? "Pause" : "Start")
+        HStack(spacing: 0) {
+            fusedControlButton(
+                systemName: state.isRunning ? "pause.fill" : "play.fill",
+                help: state.isRunning ? "Pause" : "Start",
+                usesSpaceShortcut: true,
+                action: state.toggleRunning
+            )
+            Divider()
+                .frame(height: 18)
+            fusedControlButton(
+                systemName: "arrow.counterclockwise",
+                help: "Reset",
+                action: state.reset
+            )
+            Divider()
+                .frame(height: 18)
+            fusedControlButton(
+                systemName: "checkmark",
+                help: "Complete task",
+                action: state.completeTask
+            )
+        }
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(.separator.opacity(0.55), lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
 
-            Button {
-                state.reset()
-            } label: {
-                Image(systemName: "arrow.counterclockwise")
-                    .frame(width: 16)
-            }
-            .buttonStyle(.bordered)
-            .help("Reset")
+    @ViewBuilder
+    private func fusedControlButton(
+        systemName: String,
+        help: String,
+        usesSpaceShortcut: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        let button = Button(action: action) {
+            Image(systemName: systemName)
+                .frame(width: 26, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
 
-            Button {
-                state.completeTask()
-            } label: {
-                Image(systemName: "checkmark")
-                    .frame(width: 16)
-            }
-            .buttonStyle(.bordered)
-            .help("Complete task")
+        if usesSpaceShortcut {
+            button.keyboardShortcut(.space, modifiers: [])
+        } else {
+            button
         }
     }
 }

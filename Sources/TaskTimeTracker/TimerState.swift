@@ -78,11 +78,13 @@ final class TimerState: ObservableObject {
         guard !isRunning else { return }
         isRunning = true
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.tick()
             }
         }
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     func pause() {

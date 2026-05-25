@@ -13,7 +13,7 @@ struct TaskTimeTrackerApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra(state.menuBarTitle, systemImage: state.isRunning ? "timer" : "timer.circle") {
+        MenuBarExtra {
             Text(state.currentTaskName)
                 .font(.headline)
             Text(state.formattedTime(state.displaySeconds))
@@ -51,6 +51,13 @@ struct TaskTimeTrackerApp: App {
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")
+        } label: {
+            if state.isRunning {
+                Text(state.formattedTime(state.displaySeconds))
+                    .monospacedDigit()
+            } else {
+                Image(systemName: "timer.circle")
+            }
         }
         .menuBarExtraStyle(.menu)
     }
