@@ -16,15 +16,104 @@ final class StatusBarController: NSObject {
 
         if let button = statusItem.button {
             button.target = self
-            button.action = #selector(openTimerWindow)
+            button.action = #selector(handleStatusItemClick)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
         bindUpdates()
         updateStatusItem()
     }
 
-    @objc private func openTimerWindow() {
+    @objc private func handleStatusItemClick() {
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            showMenu()
+        } else {
+            windowController.show()
+        }
+    }
+
+    @objc private func showTimerWindow() {
         windowController.show()
+    }
+
+    @objc private func hideTimerWindow() {
+        windowController.hide()
+    }
+
+    @objc private func toggleRunning() {
+        state.toggleRunning()
+    }
+
+    @objc private func resetTimer() {
+        state.reset()
+    }
+
+    @objc private func selectCountUpMode() {
+        state.mode = .countUp
+    }
+
+    @objc private func selectCountdownMode() {
+        state.mode = .countdown
+    }
+
+    @objc private func toggleKeepOnTop() {
+        state.keepOnTop.toggle()
+    }
+
+    @objc private func quit() {
+        NSApplication.shared.terminate(nil)
+    }
+
+    private func showMenu() {
+        guard let button = statusItem.button else { return }
+
+        let menu = NSMenu()
+
+        let taskItem = NSMenuItem(title: state.currentTaskName, action: nil, keyEquivalent: "")
+        taskItem.isEnabled = false
+        menu.addItem(taskItem)
+
+        let timeItem = NSMenuItem(title: state.formattedTime(state.displaySeconds), action: nil, keyEquivalent: "")
+        timeItem.isEnabled = false
+        menu.addItem(timeItem)
+        menu.addItem(.separator())
+
+        if windowController.isVisible {
+            menu.addItem(menuItem("Hide Timer", action: #selector(hideTimerWindow), keyEquivalent: "t"))
+        } else {
+            menu.addItem(menuItem("Show Timer", action: #selector(showTimerWindow), keyEquivalent: "t"))
+        }
+        menu.addItem(.separator())
+
+        menu.addItem(menuItem(state.isRunning ? "Pause" : "Start", action: #selector(toggleRunning), keyEquivalent: " "))
+        menu.addItem(menuItem("Reset", action: #selector(resetTimer)))
+
+        let modeMenu = NSMenu()
+        let countUpItem = menuItem(TimerMode.countUp.rawValue, action: #selector(selectCountUpMode))
+        countUpItem.state = state.mode == .countUp ? .on : .off
+        modeMenu.addItem(countUpItem)
+        let countdownItem = menuItem(TimerMode.countdown.rawValue, action: #selector(selectCountdownMode))
+        countdownItem.state = state.mode == .countdown ? .on : .off
+        modeMenu.addItem(countdownItem)
+
+        let modeItem = NSMenuItem(title: "Mode", action: nil, keyEquivalent: "")
+        modeItem.submenu = modeMenu
+        menu.addItem(modeItem)
+
+        let keepOnTopItem = menuItem("Keep On Top", action: #selector(toggleKeepOnTop))
+        keepOnTopItem.state = state.keepOnTop ? .on : .off
+        menu.addItem(keepOnTopItem)
+
+        menu.addItem(.separator())
+        menu.addItem(menuItem("Quit Task Time Tracker", action: #selector(quit), keyEquivalent: "q"))
+
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+    }
+
+    private func menuItem(_ title: String, action: Selector, keyEquivalent: String = "") -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
+        item.target = self
+        return item
     }
 
     private func bindUpdates() {
