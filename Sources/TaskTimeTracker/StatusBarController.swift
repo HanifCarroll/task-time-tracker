@@ -2,7 +2,7 @@ import AppKit
 import Combine
 
 @MainActor
-final class StatusBarController: NSObject {
+final class StatusBarController: NSObject, NSMenuDelegate {
     private let state: TimerState
     private let windowController: FloatingTimerWindowController
     private let statusItem: NSStatusItem
@@ -68,6 +68,7 @@ final class StatusBarController: NSObject {
         guard let button = statusItem.button else { return }
 
         let menu = NSMenu()
+        menu.delegate = self
 
         let taskItem = NSMenuItem(title: state.currentTaskName, action: nil, keyEquivalent: "")
         taskItem.isEnabled = false
@@ -107,7 +108,12 @@ final class StatusBarController: NSObject {
         menu.addItem(.separator())
         menu.addItem(menuItem("Quit Task Time Tracker", action: #selector(quit), keyEquivalent: "q"))
 
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+        statusItem.menu = menu
+        button.performClick(nil)
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        statusItem.menu = nil
     }
 
     private func menuItem(_ title: String, action: Selector, keyEquivalent: String = "") -> NSMenuItem {
