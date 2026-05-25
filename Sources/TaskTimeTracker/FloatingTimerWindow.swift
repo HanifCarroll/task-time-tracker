@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class FloatingTimerWindowController: ObservableObject {
+final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     @Published private(set) var isVisible = false
 
     private let state: TimerState
@@ -10,6 +10,7 @@ final class FloatingTimerWindowController: ObservableObject {
 
     init(state: TimerState) {
         self.state = state
+        super.init()
     }
 
     func show() {
@@ -38,6 +39,10 @@ final class FloatingTimerWindowController: ObservableObject {
         panel?.level = state.keepOnTop ? .floating : .normal
     }
 
+    func windowWillClose(_ notification: Notification) {
+        isVisible = false
+    }
+
     private func makePanel() -> NSPanel {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 220, height: 132),
@@ -52,6 +57,7 @@ final class FloatingTimerWindowController: ObservableObject {
         panel.minSize = NSSize(width: 220, height: 132)
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.delegate = self
         panel.contentView = NSHostingView(rootView: TimerPanelView(state: state, windowController: self))
         positionInTopRight(panel)
         return panel
