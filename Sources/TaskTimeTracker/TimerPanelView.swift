@@ -55,16 +55,17 @@ struct TimerPanelView: View {
     private var timerDisplay: some View {
         VStack(spacing: 4) {
             Group {
-                if state.isRunning {
-                    Text(state.formattedTime(state.displaySeconds))
-                        .contentTransition(.numericText())
-                } else {
-                    TextField("00:00", text: $timeEditorText)
+                if state.mode == .countdown, !state.isRunning {
+                    TextField("25", text: $timeEditorText)
                         .textFieldStyle(.plain)
                         .multilineTextAlignment(.center)
                         .focused($isTimeEditorFocused)
                         .onAppear(perform: syncTimeEditor)
                         .onSubmit(commitTimeEditor)
+                        .onChange(of: timeEditorText) { _, newValue in
+                            let digitsOnly = newValue.filter(\.isNumber)
+                            if digitsOnly != newValue { timeEditorText = digitsOnly }
+                        }
                         .onChange(of: isTimeEditorFocused) { _, focused in
                             focused ? syncTimeEditor() : commitTimeEditor()
                         }
@@ -74,6 +75,9 @@ struct TimerPanelView: View {
                         .onChange(of: state.mode) { _, _ in
                             syncTimeEditor()
                         }
+                } else {
+                    Text(state.formattedTime(state.displaySeconds))
+                        .contentTransition(.numericText())
                 }
             }
             .font(.system(size: 54, weight: .bold, design: .rounded).monospacedDigit())
@@ -90,31 +94,16 @@ struct TimerPanelView: View {
     }
 
     private func syncTimeEditor() {
-        timeEditorText = state.formattedTime(state.displaySeconds)
+        timeEditorText = String(max(state.countdownSeconds / 60, 1))
     }
 
     private func commitTimeEditor() {
-        guard let seconds = parseTimeEditorText(timeEditorText) else {
+        guard let minutes = Int(timeEditorText), minutes > 0 else {
             syncTimeEditor()
             return
         }
-        state.setStoppedDisplaySeconds(seconds)
+        state.setStoppedCountdownMinutes(minutes)
         syncTimeEditor()
-    }
-
-    private func parseTimeEditorText(_ text: String) -> Int? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
-        guard parts.count <= 3 else { return nil }
-
-        var seconds = 0
-        for part in parts {
-            guard let value = Int(part), value >= 0 else { return nil }
-            seconds = seconds * 60 + value
-        }
-        return seconds
     }
 
     private var controls: some View {

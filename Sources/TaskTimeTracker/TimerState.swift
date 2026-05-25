@@ -25,7 +25,13 @@ struct TrackedTask: Identifiable, Equatable {
 @MainActor
 final class TimerState: ObservableObject {
     @Published var taskTitle = "Deep work"
-    @Published var mode: TimerMode = .countUp
+    @Published var mode: TimerMode = .countUp {
+        didSet {
+            guard mode != oldValue else { return }
+            pause()
+            elapsedSeconds = 0
+        }
+    }
     @Published var countdownSeconds = 25 * 60
     @Published var elapsedSeconds = 0
     @Published var isRunning = false
@@ -90,16 +96,10 @@ final class TimerState: ObservableObject {
         elapsedSeconds = 0
     }
 
-    func setStoppedDisplaySeconds(_ seconds: Int) {
-        guard !isRunning else { return }
-        let clampedSeconds = max(seconds, 0)
-        switch mode {
-        case .countUp:
-            elapsedSeconds = clampedSeconds
-        case .countdown:
-            countdownSeconds = max(clampedSeconds, 1)
-            elapsedSeconds = 0
-        }
+    func setStoppedCountdownMinutes(_ minutes: Int) {
+        guard mode == .countdown, !isRunning else { return }
+        countdownSeconds = max(minutes, 1) * 60
+        elapsedSeconds = 0
     }
 
     func completeTask() {
