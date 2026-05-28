@@ -5,7 +5,8 @@ import SwiftUI
 final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     @Published private(set) var isVisible = false
 
-    private static let defaultSize = NSSize(width: 220, height: 132)
+    private static let legacyDefaultSize = NSSize(width: 220, height: 132)
+    private static let defaultSize = NSSize(width: 320, height: 104)
     private static let savedWidthKey = "FloatingTimerWindow.width"
     private static let savedHeightKey = "FloatingTimerWindow.height"
 
@@ -78,9 +79,15 @@ final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowD
         let defaults = UserDefaults.standard
         let width = defaults.double(forKey: Self.savedWidthKey)
         let height = defaults.double(forKey: Self.savedHeightKey)
+
         guard width >= Self.defaultSize.width, height >= Self.defaultSize.height else {
             return Self.defaultSize
         }
+
+        if width == Self.legacyDefaultSize.width, height == Self.legacyDefaultSize.height {
+            return Self.defaultSize
+        }
+
         return NSSize(width: width, height: height)
     }
 

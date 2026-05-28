@@ -76,6 +76,9 @@ final class TimerState: ObservableObject {
 
     func start() {
         guard !isRunning else { return }
+        if mode == .countdown, elapsedSeconds >= countdownSeconds {
+            elapsedSeconds = 0
+        }
         isRunning = true
         timer?.invalidate()
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in

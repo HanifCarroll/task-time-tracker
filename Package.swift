@@ -16,6 +16,11 @@ let package = Package(
             swiftSettings: [
                 .enableUpcomingFeature("StrictConcurrency")
             ]
+        ),
+        .testTarget(
+            name: "TaskTimeTrackerTests",
+            dependencies: ["TaskTimeTracker"],
+            path: "Tests/TaskTimeTrackerTests"
         )
     ]
 )

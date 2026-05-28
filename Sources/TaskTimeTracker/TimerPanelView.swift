@@ -8,19 +8,18 @@ struct TimerPanelView: View {
     @FocusState private var isTimeEditorFocused: Bool
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             taskEditor
-            timerDisplay
-            bottomBar
+            mainRow
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(
-            minWidth: 220,
-            idealWidth: 220,
+            minWidth: 320,
+            idealWidth: 320,
             maxWidth: .infinity,
-            minHeight: 132,
-            idealHeight: 132,
+            minHeight: 104,
+            idealHeight: 104,
             maxHeight: .infinity
         )
         .background(.regularMaterial)
@@ -36,20 +35,23 @@ struct TimerPanelView: View {
             .multilineTextAlignment(.center)
     }
 
-    private var bottomBar: some View {
-        HStack(spacing: 8) {
-            Picker("Mode", selection: $state.mode) {
-                ForEach(TimerMode.allCases) { mode in
-                    Image(systemName: mode.symbolName).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 82)
-
-            Spacer(minLength: 0)
+    private var mainRow: some View {
+        HStack(alignment: .center, spacing: 8) {
+            modePicker
+            timerDisplay
             controls
         }
+    }
+
+    private var modePicker: some View {
+        Picker("Mode", selection: $state.mode) {
+            ForEach(TimerMode.allCases) { mode in
+                Image(systemName: mode.symbolName).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(width: 82)
     }
 
     private var timerDisplay: some View {
@@ -80,9 +82,9 @@ struct TimerPanelView: View {
                         .contentTransition(.numericText())
                 }
             }
-            .font(.system(size: 54, weight: .bold, design: .rounded).monospacedDigit())
+            .font(.system(size: 40, weight: .bold, design: .rounded).monospacedDigit())
             .lineLimit(1)
-            .minimumScaleFactor(0.55)
+            .minimumScaleFactor(0.6)
             .frame(maxWidth: .infinity)
 
             if state.mode == .countdown {
@@ -90,7 +92,7 @@ struct TimerPanelView: View {
                     .progressViewStyle(.linear)
             }
         }
-        .padding(.vertical, 0)
+        .frame(maxWidth: .infinity)
     }
 
     private func syncTimeEditor() {
