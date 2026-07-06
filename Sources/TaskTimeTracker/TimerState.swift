@@ -209,9 +209,12 @@ final class TimerState: ObservableObject {
     }
 
     func setTitle(for id: TaskTimer.ID, _ title: String) {
-        updateTask(id) { task in
-            task.title = title
-        }
+        var updatedTasks = tasks
+        guard let index = updatedTasks.firstIndex(where: { $0.id == id }) else { return }
+        guard updatedTasks[index].title != title else { return }
+
+        updatedTasks[index].title = title
+        tasks = updatedTasks
         persist { try workLogStore?.updateTaskTitle(taskID: id, title: title) }
     }
 

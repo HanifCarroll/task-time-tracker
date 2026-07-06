@@ -107,6 +107,15 @@ final class WorkLogStore {
     func updateTaskTitle(taskID: UUID, title: String, at date: Date = Date()) throws {
         let atMS = Self.timestampMilliseconds(date)
         try dbQueue.write { db in
+            let currentTitle = try String.fetchOne(
+                db,
+                sql: "SELECT current_title FROM tasks WHERE id = ?",
+                arguments: [taskID.uuidString]
+            )
+            if let currentTitle, currentTitle == title {
+                return
+            }
+
             try db.execute(
                 sql: """
                 UPDATE tasks

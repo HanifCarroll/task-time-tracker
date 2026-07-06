@@ -106,6 +106,24 @@ final class TimerStateTests: XCTestCase {
     }
 
     @MainActor
+    func testUnchangedTitleDoesNotCreateRenameEvent() throws {
+        let store = try makeTemporaryStore()
+        let task = TaskTimer(title: "Inbox cleanup")
+        let state = TimerState(tasks: [task], workLogStore: store)
+
+        state.setTitle(for: task.id, "Inbox cleanup")
+        try store.updateTaskTitle(taskID: task.id, title: "Inbox cleanup")
+
+        XCTAssertEqual(try store.eventCount(type: "task_renamed"), 0)
+
+        state.setTitle(for: task.id, "Inbox review")
+        try store.updateTaskTitle(taskID: task.id, title: "Inbox review")
+
+        XCTAssertEqual(state.tasks.first?.title, "Inbox review")
+        XCTAssertEqual(try store.eventCount(type: "task_renamed"), 1)
+    }
+
+    @MainActor
     private func makeTemporaryStore() throws -> WorkLogStore {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
