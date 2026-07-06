@@ -70,13 +70,13 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
 
-        let taskItem = NSMenuItem(title: state.currentTaskName, action: nil, keyEquivalent: "")
+        let taskItem = NSMenuItem(title: state.menuBarTitle, action: nil, keyEquivalent: "")
         taskItem.isEnabled = false
         menu.addItem(taskItem)
 
-        let timeItem = NSMenuItem(title: state.formattedTime(state.displaySeconds), action: nil, keyEquivalent: "")
-        timeItem.isEnabled = false
-        menu.addItem(timeItem)
+        let summaryItem = NSMenuItem(title: state.taskSummary, action: nil, keyEquivalent: "")
+        summaryItem.isEnabled = false
+        menu.addItem(summaryItem)
         menu.addItem(.separator())
 
         if windowController.isVisible {
@@ -143,9 +143,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }
 
-        if state.isRunning, !windowController.isVisible {
+        if state.hasRunningTasks, !windowController.isVisible {
             button.image = nil
-            button.title = state.formattedTime(state.displaySeconds)
+            button.title = state.statusBarTitle
             button.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         } else {
             button.title = ""

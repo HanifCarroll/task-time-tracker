@@ -4,131 +4,195 @@ struct TimerPanelView: View {
     @ObservedObject var state: TimerState
     let windowController: FloatingTimerWindowController
 
-    @State private var timeEditorText = ""
-    @FocusState private var isTimeEditorFocused: Bool
-
     var body: some View {
         VStack(spacing: 6) {
-            taskEditor
-            mainRow
+            header
+            taskList
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
+        .padding(.bottom, 9)
         .frame(
-            minWidth: 320,
-            idealWidth: 320,
+            minWidth: 390,
+            idealWidth: 430,
             maxWidth: .infinity,
-            minHeight: 104,
-            idealHeight: 104,
+            minHeight: 82,
+            idealHeight: 96,
             maxHeight: .infinity
         )
         .background(.regularMaterial)
         .onChange(of: state.keepOnTop) { _, _ in
             windowController.applyLevel()
         }
+        .onDeleteCommand {
+            state.deleteSelectedTask()
+        }
     }
 
-    private var taskEditor: some View {
-        TextField("Task", text: $state.taskTitle)
-            .textFieldStyle(.plain)
-            .font(.callout.weight(.medium))
-            .multilineTextAlignment(.center)
-    }
-
-    private var mainRow: some View {
+    private var header: some View {
         HStack(alignment: .center, spacing: 8) {
-            modePicker
-            timerDisplay
-            controls
+            Text("Task Time Tracker")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            Text(state.taskSummary)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 8)
+
+            Button(action: state.addTask) {
+                Image(systemName: "plus")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 22, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Add task")
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(.separator.opacity(0.45), lineWidth: 1)
+            }
+        }
+    }
+
+    private var taskList: some View {
+        ScrollView {
+            LazyVStack(spacing: 4) {
+                ForEach($state.tasks) { $task in
+                    TaskTimerRow(
+                        task: $task,
+                        isSelected: task.id == state.selectedTaskID,
+                        state: state
+                    )
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+    }
+}
+
+private struct TaskTimerRow: View {
+    @Binding var task: TaskTimer
+    let isSelected: Bool
+    @ObservedObject var state: TimerState
+
+    @State private var timeEditorText = ""
+    @State private var isHovered = false
+    @FocusState private var isTimeEditorFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 3) {
+            HStack(alignment: .center, spacing: 6) {
+                statusDot
+
+                TaskTitleEditor(task: task, state: state)
+                    .frame(minWidth: 70, maxWidth: .infinity, alignment: .leading)
+
+                modePicker
+
+                timerDisplay
+
+                controls
+
+                deleteButton
+            }
+
+            if task.mode == .countdown {
+                ProgressView(value: state.progress(for: task))
+                    .progressViewStyle(.linear)
+                    .tint(statusColor)
+                    .frame(height: 2)
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isSelected ? Color.primary.opacity(0.045) : Color.clear)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            state.selectTask(task.id)
+        }
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                state.deleteTask(task.id)
+            } label: {
+                Label("Delete Task", systemImage: "trash")
+            }
         }
     }
 
     private var modePicker: some View {
-        Picker("Mode", selection: $state.mode) {
+        Picker("Mode", selection: modeBinding) {
             ForEach(TimerMode.allCases) { mode in
                 Image(systemName: mode.symbolName).tag(mode)
             }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .frame(width: 82)
+        .controlSize(.mini)
+        .frame(width: 58)
     }
 
     private var timerDisplay: some View {
-        VStack(spacing: 4) {
-            Group {
-                if state.mode == .countdown, !state.isRunning {
-                    TextField("25", text: $timeEditorText)
-                        .textFieldStyle(.plain)
-                        .multilineTextAlignment(.center)
-                        .focused($isTimeEditorFocused)
-                        .onAppear(perform: syncTimeEditor)
-                        .onSubmit(commitTimeEditor)
-                        .onChange(of: timeEditorText) { _, newValue in
-                            let digitsOnly = newValue.filter(\.isNumber)
-                            if digitsOnly != newValue { timeEditorText = digitsOnly }
+        Group {
+            if task.mode == .countdown, !task.isRunning {
+                TextField("25", text: $timeEditorText)
+                    .textFieldStyle(.plain)
+                    .multilineTextAlignment(.trailing)
+                    .focused($isTimeEditorFocused)
+                    .onAppear(perform: syncTimeEditor)
+                    .onSubmit(commitTimeEditor)
+                    .onChange(of: timeEditorText) { _, newValue in
+                        let digitsOnly = newValue.filter(\.isNumber)
+                        if digitsOnly != newValue {
+                            timeEditorText = digitsOnly
                         }
-                        .onChange(of: isTimeEditorFocused) { _, focused in
-                            focused ? syncTimeEditor() : commitTimeEditor()
-                        }
-                        .onChange(of: state.displaySeconds) { _, _ in
-                            if !isTimeEditorFocused { syncTimeEditor() }
-                        }
-                        .onChange(of: state.mode) { _, _ in
+                    }
+                    .onChange(of: isTimeEditorFocused) { _, focused in
+                        focused ? syncTimeEditor() : commitTimeEditor()
+                    }
+                    .onChange(of: task.countdownSeconds) { _, _ in
+                        if !isTimeEditorFocused {
                             syncTimeEditor()
                         }
-                } else {
-                    Text(state.formattedTime(state.displaySeconds))
-                        .contentTransition(.numericText())
-                }
-            }
-            .font(.system(size: 40, weight: .bold, design: .rounded).monospacedDigit())
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-            .frame(maxWidth: .infinity)
-
-            if state.mode == .countdown {
-                ProgressView(value: state.progress)
-                    .progressViewStyle(.linear)
+                    }
+                    .onChange(of: task.mode) { _, _ in
+                        syncTimeEditor()
+                    }
+                    .onChange(of: task.id) { _, _ in
+                        syncTimeEditor()
+                    }
+            } else {
+                Text(state.formattedTime(state.displaySeconds(for: task)))
+                    .contentTransition(.numericText())
             }
         }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func syncTimeEditor() {
-        timeEditorText = String(max(state.countdownSeconds / 60, 1))
-    }
-
-    private func commitTimeEditor() {
-        guard let minutes = Int(timeEditorText), minutes > 0 else {
-            syncTimeEditor()
-            return
-        }
-        state.setStoppedCountdownMinutes(minutes)
-        syncTimeEditor()
+        .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
+        .lineLimit(1)
+        .minimumScaleFactor(0.72)
+        .frame(width: 72, alignment: .trailing)
     }
 
     private var controls: some View {
         HStack(spacing: 0) {
             fusedControlButton(
-                systemName: state.isRunning ? "pause.fill" : "play.fill",
-                help: state.isRunning ? "Pause" : "Start",
-                usesSpaceShortcut: true,
-                action: state.toggleRunning
+                systemName: task.isRunning ? "pause.fill" : "play.fill",
+                help: task.isRunning ? "Pause" : "Start",
+                action: { state.toggleRunning(for: task.id) }
             )
             Divider()
-                .frame(height: 18)
+                .frame(height: 16)
             fusedControlButton(
                 systemName: "arrow.counterclockwise",
                 help: "Reset",
-                action: state.reset
-            )
-            Divider()
-                .frame(height: 18)
-            fusedControlButton(
-                systemName: "checkmark",
-                help: "Complete task",
-                action: state.completeTask
+                action: { state.resetTask(task.id) }
             )
         }
         .background(.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
@@ -139,25 +203,129 @@ struct TimerPanelView: View {
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
-    @ViewBuilder
+    private var deleteButton: some View {
+        Button(role: .destructive) {
+            state.deleteTask(task.id)
+        } label: {
+            Image(systemName: "trash")
+                .font(.caption.weight(.semibold))
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Delete task")
+        .disabled(!(isHovered || isSelected))
+        .opacity(isHovered || isSelected ? 1 : 0)
+    }
+
+    private var statusDot: some View {
+        Circle()
+            .fill(statusColor)
+            .frame(width: 6, height: 6)
+            .accessibilityHidden(true)
+    }
+
+    private var statusColor: Color {
+        if task.isRunning {
+            return Color(nsColor: .systemGreen)
+        }
+
+        if task.mode == .countdown {
+            return Color(nsColor: .systemYellow)
+        }
+
+        return Color.secondary.opacity(0.75)
+    }
+
+    private var modeBinding: Binding<TimerMode> {
+        Binding(
+            get: { task.mode },
+            set: { state.setMode(for: task.id, $0) }
+        )
+    }
+
+    private func syncTimeEditor() {
+        timeEditorText = String(max(task.countdownSeconds / 60, 1))
+    }
+
+    private func commitTimeEditor() {
+        guard let minutes = Int(timeEditorText), minutes > 0 else {
+            syncTimeEditor()
+            return
+        }
+
+        state.setStoppedCountdownMinutes(for: task.id, minutes)
+        syncTimeEditor()
+    }
+
     private func fusedControlButton(
         systemName: String,
         help: String,
-        usesSpaceShortcut: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        let button = Button(action: action) {
+        Button(action: action) {
             Image(systemName: systemName)
-                .frame(width: 26, height: 22)
+                .font(.caption.weight(.semibold))
+                .frame(width: 22, height: 20)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+}
 
-        if usesSpaceShortcut {
-            button.keyboardShortcut(.space, modifiers: [])
-        } else {
-            button
+private struct TaskTitleEditor: View {
+    let task: TaskTimer
+    @ObservedObject var state: TimerState
+
+    @State private var draftTitle = ""
+    @State private var isEditing = false
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        Group {
+            if isEditing {
+                TextField("Task", text: $draftTitle)
+                    .accessibilityLabel("Task")
+                    .textFieldStyle(.plain)
+                    .focused($isFocused)
+                    .onSubmit(endEditing)
+                    .onChange(of: isFocused) { _, focused in
+                        if !focused {
+                            endEditing()
+                        }
+                    }
+                    .onAppear {
+                        DispatchQueue.main.async {
+                            isFocused = true
+                        }
+                    }
+            } else {
+                Text(displayTitle)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .help("Edit task name")
+                    .onTapGesture {
+                        state.selectTask(task.id)
+                        draftTitle = task.title
+                        isEditing = true
+                    }
+            }
         }
+        .font(.caption.weight(.semibold))
+    }
+
+    private var displayTitle: String {
+        let trimmed = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Untitled task" : trimmed
+    }
+
+    private func endEditing() {
+        guard isEditing else { return }
+        if draftTitle != task.title {
+            state.setTitle(for: task.id, draftTitle)
+        }
+        isFocused = false
+        isEditing = false
     }
 }

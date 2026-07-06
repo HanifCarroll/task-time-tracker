@@ -2,12 +2,14 @@
 set -euo pipefail
 
 APP_NAME="TaskTimeTracker"
-BUNDLE_NAME="$APP_NAME.app"
+APP_DISPLAY_NAME="Task Time Tracker"
+BUNDLE_NAME="$APP_DISPLAY_NAME.app"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_CONFIG="release"
 EXECUTABLE_PATH="$REPO_ROOT/.build/$BUILD_CONFIG/$APP_NAME"
 APP_DIR="${TASK_TIME_TRACKER_APP_DIR:-$HOME/Applications}"
 BUNDLE_PATH="$APP_DIR/$BUNDLE_NAME"
+LEGACY_BUNDLE_PATH="$APP_DIR/$APP_NAME.app"
 CONTENTS_DIR="$BUNDLE_PATH/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -24,6 +26,10 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$EXECUTABLE_PATH" "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/$APP_NAME"
 
+if [[ "$LEGACY_BUNDLE_PATH" != "$BUNDLE_PATH" && -d "$LEGACY_BUNDLE_PATH" ]]; then
+	rm -rf "$LEGACY_BUNDLE_PATH"
+fi
+
 cat >"$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -38,9 +44,9 @@ cat >"$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Task Time Tracker</string>
+  <string>$APP_DISPLAY_NAME</string>
   <key>CFBundleDisplayName</key>
-  <string>Task Time Tracker</string>
+  <string>$APP_DISPLAY_NAME</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

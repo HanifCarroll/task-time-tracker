@@ -6,9 +6,12 @@ final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowD
     @Published private(set) var isVisible = false
 
     private static let legacyDefaultSize = NSSize(width: 220, height: 132)
-    private static let defaultSize = NSSize(width: 320, height: 104)
+    private static let oversizedDefaultSize = NSSize(width: 620, height: 300)
+    private static let defaultSize = NSSize(width: 430, height: 96)
     private static let savedWidthKey = "FloatingTimerWindow.width"
     private static let savedHeightKey = "FloatingTimerWindow.height"
+    private static let savedSizeMigrationKey = "FloatingTimerWindow.compactSizeMigration"
+    private static let compactSizeMigrationVersion = 1
 
     private let state: TimerState
     private var panel: NSPanel?
@@ -16,6 +19,7 @@ final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowD
     init(state: TimerState) {
         self.state = state
         super.init()
+        Self.migrateSavedSizeIfNeeded()
     }
 
     func show() {
@@ -79,21 +83,53 @@ final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowD
         let defaults = UserDefaults.standard
         let width = defaults.double(forKey: Self.savedWidthKey)
         let height = defaults.double(forKey: Self.savedHeightKey)
+        if Self.shouldMigrateSavedSize(width: width, height: height) {
+            Self.saveSize(Self.defaultSize, in: defaults)
+            return Self.defaultSize
+        }
 
         guard width >= Self.defaultSize.width, height >= Self.defaultSize.height else {
+            defaults.set(Self.compactSizeMigrationVersion, forKey: Self.savedSizeMigrationKey)
             return Self.defaultSize
         }
 
-        if width == Self.legacyDefaultSize.width, height == Self.legacyDefaultSize.height {
+        if (width == Self.legacyDefaultSize.width && height == Self.legacyDefaultSize.height)
+            || (width >= Self.oversizedDefaultSize.width && height >= Self.oversizedDefaultSize.height) {
+            Self.saveSize(Self.defaultSize, in: defaults)
+            defaults.set(Self.compactSizeMigrationVersion, forKey: Self.savedSizeMigrationKey)
             return Self.defaultSize
         }
 
+        defaults.set(Self.compactSizeMigrationVersion, forKey: Self.savedSizeMigrationKey)
         return NSSize(width: width, height: height)
     }
 
     private func saveSize(_ size: NSSize) {
-        UserDefaults.standard.set(size.width, forKey: Self.savedWidthKey)
-        UserDefaults.standard.set(size.height, forKey: Self.savedHeightKey)
+        Self.saveSize(size, in: .standard)
+    }
+
+    private static func migrateSavedSizeIfNeeded() {
+        let defaults = UserDefaults.standard
+        let width = defaults.double(forKey: savedWidthKey)
+        let height = defaults.double(forKey: savedHeightKey)
+
+        guard shouldMigrateSavedSize(width: width, height: height) else { return }
+        saveSize(defaultSize, in: defaults)
+    }
+
+    private static func shouldMigrateSavedSize(width: Double, height: Double) -> Bool {
+        let defaults = UserDefaults.standard
+        guard defaults.integer(forKey: savedSizeMigrationKey) < compactSizeMigrationVersion else {
+            return false
+        }
+
+        return width > defaultSize.width || height > defaultSize.height
+    }
+
+    private static func saveSize(_ size: NSSize, in defaults: UserDefaults) {
+        defaults.set(size.width, forKey: savedWidthKey)
+        defaults.set(size.height, forKey: savedHeightKey)
+        defaults.set(compactSizeMigrationVersion, forKey: savedSizeMigrationKey)
     }
 
     private func positionInTopRight(_ panel: NSPanel) {

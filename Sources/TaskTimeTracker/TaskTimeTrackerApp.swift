@@ -14,16 +14,34 @@ struct TaskTimeTrackerApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var state: TimerState?
+    private var workLogStore: WorkLogStore?
     private var windowController: FloatingTimerWindowController?
     private var statusBarController: StatusBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        let state = TimerState()
+        let workLogStore = makeWorkLogStore()
+        let state = TimerState(workLogStore: workLogStore)
         let windowController = FloatingTimerWindowController(state: state)
         self.state = state
+        self.workLogStore = workLogStore
         self.windowController = windowController
         self.statusBarController = StatusBarController(state: state, windowController: windowController)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        state?.stopAllRunningTasks()
+    }
+
+    private func makeWorkLogStore() -> WorkLogStore? {
+        do {
+            let store = try WorkLogStore.makeDefault()
+            try store.recoverOpenIntervals()
+            return store
+        } catch {
+            fputs("Task Time Tracker persistence unavailable: \(error)\n", stderr)
+            return nil
+        }
     }
 }
