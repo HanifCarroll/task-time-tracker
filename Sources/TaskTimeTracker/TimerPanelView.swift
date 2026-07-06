@@ -1,5 +1,25 @@
 import SwiftUI
 
+enum TimerPanelSizing {
+    static let minimumWidth: CGFloat = 390
+    static let minimumHeight: CGFloat = 82
+    static let headerHeight: CGFloat = 20
+    static let countUpRowHeight: CGFloat = 30
+    static let countdownRowHeight: CGFloat = 35
+    static let verticalPadding: CGFloat = 17
+    static let headerTaskSpacing: CGFloat = 6
+    static let taskSpacing: CGFloat = 4
+
+    static func contentHeight(for tasks: [TaskTimer]) -> CGFloat {
+        let rowHeights = tasks.reduce(CGFloat.zero) { total, task in
+            total + (task.mode == .countdown ? countdownRowHeight : countUpRowHeight)
+        }
+        let spacingHeight = CGFloat(max(tasks.count - 1, 0)) * taskSpacing
+        let contentHeight = verticalPadding + headerHeight + headerTaskSpacing + rowHeights + spacingHeight
+        return max(minimumHeight, ceil(contentHeight))
+    }
+}
+
 struct TimerPanelView: View {
     @ObservedObject var state: TimerState
     let windowController: FloatingTimerWindowController
@@ -13,11 +33,11 @@ struct TimerPanelView: View {
         .padding(.top, 8)
         .padding(.bottom, 9)
         .frame(
-            minWidth: 390,
-            idealWidth: 430,
+            minWidth: TimerPanelSizing.minimumWidth,
+            idealWidth: TimerPanelSizing.minimumWidth,
             maxWidth: .infinity,
-            minHeight: 82,
-            idealHeight: 96,
+            minHeight: TimerPanelSizing.minimumHeight,
+            idealHeight: TimerPanelSizing.minimumHeight,
             maxHeight: .infinity
         )
         .background(.regularMaterial)
@@ -41,7 +61,7 @@ struct TimerPanelView: View {
 
             Spacer(minLength: 8)
 
-            Button(action: state.addTask) {
+            Button(action: addTask) {
                 Image(systemName: "plus")
                     .font(.caption.weight(.semibold))
                     .frame(width: 22, height: 20)
@@ -59,7 +79,7 @@ struct TimerPanelView: View {
 
     private var taskList: some View {
         ScrollView {
-            LazyVStack(spacing: 4) {
+            VStack(spacing: 4) {
                 ForEach($state.tasks) { $task in
                     TaskTimerRow(
                         task: $task,
@@ -70,6 +90,11 @@ struct TimerPanelView: View {
             }
         }
         .scrollIndicators(.hidden)
+    }
+
+    private func addTask() {
+        state.addTask()
+        windowController.scheduleFitHeightToTasks()
     }
 }
 

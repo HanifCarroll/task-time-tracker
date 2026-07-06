@@ -6,6 +6,7 @@ A minimalist macOS menu bar timer for keeping track of the tasks you are working
 
 - Menu bar status item showing active timer state.
 - Compact floating SwiftUI timer window with multiple task rows and icon-only controls.
+- Window starts at the minimum width and grows only enough to reveal added task rows.
 - Optional always-on-top behavior from the menu bar.
 - Count-up “Free Time” mode.
 - Countdown mode with a configurable duration.
@@ -41,6 +42,10 @@ swift run TaskTimeTracker
 ```
 
 The script builds a release executable, packages `Task Time Tracker.app`, installs it into `~/Applications`, removes the older `TaskTimeTracker.app` bundle if present, and relaunches the app if it is already running.
+
+## Window sizing
+
+The floating panel starts at its minimum content width. Adding or removing tasks automatically fits the panel height to the visible task rows while keeping the width compact. The window still supports manual resizing, but saved width is normalized back to the compact minimum on restore.
 
 ## Work history database
 

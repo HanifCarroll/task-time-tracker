@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import TaskTimeTracker
 
@@ -121,6 +122,33 @@ final class TimerStateTests: XCTestCase {
 
         XCTAssertEqual(state.tasks.first?.title, "Inbox review")
         XCTAssertEqual(try store.eventCount(type: "task_renamed"), 1)
+    }
+
+    func testWindowSizingRestoresMinimumWidthAndFitsContentHeight() {
+        let restoredSize = FloatingTimerWindowSizing.restoredSize(
+            savedWidth: 430,
+            savedHeight: 180,
+            migrationVersion: 2,
+            currentMigrationVersion: 2
+        )
+
+        XCTAssertEqual(restoredSize.width, 390)
+        XCTAssertEqual(restoredSize.height, 180)
+        XCTAssertEqual(FloatingTimerWindowSizing.fittedHeight(for: 70, visibleFrame: nil), 82)
+
+        let visibleFrame = NSRect(x: 0, y: 0, width: 800, height: 220)
+        XCTAssertEqual(FloatingTimerWindowSizing.fittedHeight(for: 400, visibleFrame: visibleFrame), 156)
+        XCTAssertEqual(FloatingTimerWindowSizing.frameHeight(for: 400, visibleFrame: visibleFrame), 188)
+
+        XCTAssertEqual(TimerPanelSizing.contentHeight(for: [TaskTimer(title: "One")]), 82)
+        XCTAssertEqual(TimerPanelSizing.contentHeight(for: [
+            TaskTimer(title: "One"),
+            TaskTimer(title: "Two")
+        ]), 107)
+        XCTAssertEqual(TimerPanelSizing.contentHeight(for: [
+            TaskTimer(title: "One", mode: .countdown),
+            TaskTimer(title: "Two")
+        ]), 112)
     }
 
     @MainActor
