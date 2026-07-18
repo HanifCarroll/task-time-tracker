@@ -61,18 +61,26 @@ struct TimerPanelView: View {
 
             Spacer(minLength: 8)
 
-            Button(action: addTask) {
-                Image(systemName: "plus")
-                    .font(.caption.weight(.semibold))
-                    .frame(width: 22, height: 20)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Add task")
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(.separator.opacity(0.45), lineWidth: 1)
+            HStack(spacing: 4) {
+                headerButton(
+                    systemName: state.hasRunningTasks ? "pause.fill" : "play.fill",
+                    help: state.hasRunningTasks ? "Pause all timers" : "Start all timers",
+                    action: state.toggleAllRunningTasks
+                )
+                .disabled(state.tasks.isEmpty)
+
+                headerButton(
+                    systemName: "arrow.counterclockwise",
+                    help: "Reset all timers",
+                    action: state.resetAllTasks
+                )
+                .disabled(state.tasks.isEmpty)
+
+                headerButton(
+                    systemName: "plus",
+                    help: "Add task",
+                    action: state.addTask
+                )
             }
         }
     }
@@ -92,9 +100,24 @@ struct TimerPanelView: View {
         .scrollIndicators(.hidden)
     }
 
-    private func addTask() {
-        state.addTask()
-        windowController.scheduleFitHeightToTasks()
+    private func headerButton(
+        systemName: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.caption.weight(.semibold))
+                .frame(width: 22, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(.separator.opacity(0.45), lineWidth: 1)
+        }
     }
 }
 
@@ -125,10 +148,7 @@ private struct TaskTimerRow: View {
             }
 
             if task.mode == .countdown {
-                ProgressView(value: state.progress(for: task))
-                    .progressViewStyle(.linear)
-                    .tint(statusColor)
-                    .frame(height: 2)
+                countdownProgress
             }
         }
         .padding(.horizontal, 7)
@@ -194,15 +214,42 @@ private struct TaskTimerRow: View {
                     .onChange(of: task.id) { _, _ in
                         syncTimeEditor()
                     }
+            } else if task.isRunning {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    timerText(at: context.date)
+                }
             } else {
-                Text(state.formattedTime(state.displaySeconds(for: task)))
-                    .contentTransition(.numericText())
+                timerText(at: .now)
             }
         }
         .font(.system(size: 20, weight: .bold, design: .rounded).monospacedDigit())
         .lineLimit(1)
         .minimumScaleFactor(0.72)
         .frame(width: 72, alignment: .trailing)
+    }
+
+    private var countdownProgress: some View {
+        Group {
+            if task.isRunning {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    progressView(at: context.date)
+                }
+            } else {
+                progressView(at: .now)
+            }
+        }
+        .frame(height: 2)
+    }
+
+    private func timerText(at date: Date) -> some View {
+        Text(state.formattedTime(state.displaySeconds(for: task, at: date)))
+            .contentTransition(.numericText())
+    }
+
+    private func progressView(at date: Date) -> some View {
+        ProgressView(value: state.progress(for: task, at: date))
+            .progressViewStyle(.linear)
+            .tint(statusColor)
     }
 
     private var controls: some View {

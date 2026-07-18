@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 enum TimerMode: String, CaseIterable, Identifiable {
@@ -39,6 +40,7 @@ struct TaskTimer: Identifiable, Equatable {
     var elapsedSeconds: Int
     var isRunning: Bool
     var activeIntervalID: UUID?
+    var startedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -47,7 +49,8 @@ struct TaskTimer: Identifiable, Equatable {
         countdownSeconds: Int = 25 * 60,
         elapsedSeconds: Int = 0,
         isRunning: Bool = false,
-        activeIntervalID: UUID? = nil
+        activeIntervalID: UUID? = nil,
+        startedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -56,6 +59,7 @@ struct TaskTimer: Identifiable, Equatable {
         self.elapsedSeconds = elapsedSeconds
         self.isRunning = isRunning
         self.activeIntervalID = activeIntervalID
+        self.startedAt = startedAt
     }
 }
 
@@ -64,6 +68,8 @@ final class TimerState: ObservableObject {
     @Published var tasks: [TaskTimer]
     @Published private(set) var selectedTaskID: TaskTimer.ID?
     @Published var keepOnTop = true
+
+    let tickPublisher = PassthroughSubject<Date, Never>()
 
     private let workLogStore: WorkLogStore?
     private var timer: Timer?
@@ -171,11 +177,11 @@ final class TimerState: ObservableObject {
     }
 
     var displaySeconds: Int {
-        selectedTask.map(displaySeconds(for:)) ?? 0
+        selectedTask.map { displaySeconds(for: $0) } ?? 0
     }
 
     var progress: Double {
-        selectedTask.map(progress(for:)) ?? 0
+        selectedTask.map { progress(for: $0) } ?? 0
     }
 
     var currentTaskName: String {
@@ -229,6 +235,7 @@ final class TimerState: ObservableObject {
             task.mode = mode
             task.elapsedSeconds = 0
             task.activeIntervalID = nil
+            task.startedAt = nil
             persist { try workLogStore?.updateTaskMode(task) }
         }
         if shouldCloseInterval {
@@ -259,6 +266,7 @@ final class TimerState: ObservableObject {
     }
 
     func startTask(_ id: TaskTimer.ID) {
+        let now = Date()
         updateTask(id) { task in
             guard !task.isRunning else { return }
 
@@ -267,6 +275,7 @@ final class TimerState: ObservableObject {
             }
 
             task.activeIntervalID = startInterval(for: task)
+            task.startedAt = now
             task.isRunning = true
         }
         updateTimerLifecycle()
@@ -278,13 +287,16 @@ final class TimerState: ObservableObject {
     }
 
     func pauseTask(_ id: TaskTimer.ID) {
+        let now = Date()
         var intervalToClose: UUID?
         var shouldCloseInterval = false
         updateTask(id) { task in
             intervalToClose = task.activeIntervalID
             shouldCloseInterval = task.isRunning
+            task.elapsedSeconds = elapsedSeconds(for: task, at: now)
             task.isRunning = false
             task.activeIntervalID = nil
+            task.startedAt = nil
         }
         if shouldCloseInterval {
             persist {
@@ -312,6 +324,7 @@ final class TimerState: ObservableObject {
             task.isRunning = false
             task.elapsedSeconds = 0
             task.activeIntervalID = nil
+            task.startedAt = nil
         }
         if shouldCloseInterval {
             persist {
@@ -335,6 +348,7 @@ final class TimerState: ObservableObject {
             guard task.mode == .countdown, !task.isRunning else { return }
             task.countdownSeconds = max(minutes, 1) * 60
             task.elapsedSeconds = 0
+            task.startedAt = nil
             persist { try workLogStore?.updateTaskMode(task) }
         }
     }
@@ -376,9 +390,45 @@ final class TimerState: ObservableObject {
         deleteTask(selectedTaskID)
     }
 
-    func stopAllRunningTasks(reason: String = "app_quit") {
+    func toggleAllRunningTasks() {
+        hasRunningTasks ? pauseAllTasks() : startAllTasks()
+    }
+
+    func startAllTasks() {
+        let now = Date()
+        var updatedTasks = tasks
+        var startedAnyTask = false
+
+        for index in updatedTasks.indices where !updatedTasks[index].isRunning {
+            if updatedTasks[index].mode == .countdown,
+               updatedTasks[index].elapsedSeconds >= updatedTasks[index].countdownSeconds {
+                updatedTasks[index].elapsedSeconds = 0
+            }
+
+            updatedTasks[index].activeIntervalID = startInterval(for: updatedTasks[index])
+            updatedTasks[index].startedAt = now
+            updatedTasks[index].isRunning = true
+            startedAnyTask = true
+        }
+
+        guard startedAnyTask else { return }
+        tasks = updatedTasks
+        updateTimerLifecycle()
+    }
+
+    func pauseAllTasks(reason: String = "paused_all") {
+        let now = Date()
         let runningTasks = tasks.filter(\.isRunning)
         guard !runningTasks.isEmpty else { return }
+
+        var updatedTasks = tasks
+        for index in updatedTasks.indices where updatedTasks[index].isRunning {
+            updatedTasks[index].elapsedSeconds = elapsedSeconds(for: updatedTasks[index], at: now)
+            updatedTasks[index].isRunning = false
+            updatedTasks[index].activeIntervalID = nil
+            updatedTasks[index].startedAt = nil
+        }
+        tasks = updatedTasks
 
         for task in runningTasks {
             persist {
@@ -389,29 +439,52 @@ final class TimerState: ObservableObject {
                 )
             }
         }
+        updateTimerLifecycle()
+    }
 
+    func resetAllTasks() {
+        guard !tasks.isEmpty else { return }
+
+        let runningTasks = tasks.filter(\.isRunning)
         tasks = tasks.map { task in
             var updatedTask = task
+            updatedTask.elapsedSeconds = 0
             updatedTask.isRunning = false
             updatedTask.activeIntervalID = nil
+            updatedTask.startedAt = nil
             return updatedTask
+        }
+
+        for task in runningTasks {
+            persist {
+                try workLogStore?.endInterval(
+                    task.activeIntervalID,
+                    taskID: task.id,
+                    reason: "reset_all"
+                )
+            }
         }
         updateTimerLifecycle()
     }
 
-    func displaySeconds(for task: TaskTimer) -> Int {
-        switch task.mode {
+    func stopAllRunningTasks(reason: String = "app_quit") {
+        pauseAllTasks(reason: reason)
+    }
+
+    func displaySeconds(for task: TaskTimer, at date: Date = Date()) -> Int {
+        let elapsedSeconds = elapsedSeconds(for: task, at: date)
+        return switch task.mode {
         case .countUp:
-            task.elapsedSeconds
+            elapsedSeconds
         case .countdown:
-            max(task.countdownSeconds - task.elapsedSeconds, 0)
+            max(task.countdownSeconds - elapsedSeconds, 0)
         }
     }
 
-    func progress(for task: TaskTimer) -> Double {
+    func progress(for task: TaskTimer, at date: Date = Date()) -> Double {
         guard task.mode == .countdown else { return 0 }
         let total = max(task.countdownSeconds, 1)
-        return min(Double(task.elapsedSeconds) / Double(total), 1)
+        return min(Double(elapsedSeconds(for: task, at: date)) / Double(total), 1)
     }
 
     func currentTaskName(for task: TaskTimer) -> String {
@@ -472,20 +545,20 @@ final class TimerState: ObservableObject {
                 self?.tick()
             }
         }
+        timer.tolerance = 0.1
         self.timer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
 
     private func tick() {
+        let now = Date()
         var updatedTasks = tasks
         var shouldBeep = false
         var completedIntervals: [(intervalID: UUID?, taskID: UUID)] = []
 
         for index in updatedTasks.indices where updatedTasks[index].isRunning {
-            updatedTasks[index].elapsedSeconds += 1
-
             if updatedTasks[index].mode == .countdown,
-               updatedTasks[index].elapsedSeconds >= updatedTasks[index].countdownSeconds {
+               elapsedSeconds(for: updatedTasks[index], at: now) >= updatedTasks[index].countdownSeconds {
                 updatedTasks[index].elapsedSeconds = updatedTasks[index].countdownSeconds
                 updatedTasks[index].isRunning = false
                 completedIntervals.append((
@@ -493,11 +566,14 @@ final class TimerState: ObservableObject {
                     taskID: updatedTasks[index].id
                 ))
                 updatedTasks[index].activeIntervalID = nil
+                updatedTasks[index].startedAt = nil
                 shouldBeep = true
             }
         }
 
-        tasks = updatedTasks
+        if !completedIntervals.isEmpty {
+            tasks = updatedTasks
+        }
         for completedInterval in completedIntervals {
             persist {
                 try workLogStore?.endInterval(
@@ -512,8 +588,17 @@ final class TimerState: ObservableObject {
             NSSound.beep()
         }
 
+        tickPublisher.send(now)
         recordHeartbeatIfNeeded()
         updateTimerLifecycle()
+    }
+
+    private func elapsedSeconds(for task: TaskTimer, at date: Date) -> Int {
+        guard task.isRunning, let startedAt = task.startedAt else {
+            return task.elapsedSeconds
+        }
+
+        return task.elapsedSeconds + max(Int(date.timeIntervalSince(startedAt)), 0)
     }
 
     private func startInterval(for task: TaskTimer) -> UUID? {

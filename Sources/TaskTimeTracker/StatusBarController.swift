@@ -6,12 +6,18 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private let state: TimerState
     private let windowController: FloatingTimerWindowController
     private let statusItem: NSStatusItem
+    private let runningFont: NSFont
+    private let idleFont: NSFont
+    private let idleImage: NSImage?
     private var cancellables: Set<AnyCancellable> = []
 
     init(state: TimerState, windowController: FloatingTimerWindowController) {
         self.state = state
         self.windowController = windowController
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        self.runningFont = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        self.idleFont = .systemFont(ofSize: NSFont.systemFontSize)
+        self.idleImage = NSImage(systemSymbolName: "timer.circle", accessibilityDescription: "Task Time Tracker")
         super.init()
 
         if let button = statusItem.button {
@@ -138,19 +144,41 @@ final class StatusBarController: NSObject, NSMenuDelegate {
                 }
             }
             .store(in: &cancellables)
+
+        state.tickPublisher
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, !self.windowController.isVisible else { return }
+                    self.updateStatusItem()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }
 
         if state.hasRunningTasks, !windowController.isVisible {
-            button.image = nil
-            button.title = state.statusBarTitle
-            button.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            let title = state.statusBarTitle
+            if button.image != nil {
+                button.image = nil
+            }
+            if button.title != title {
+                button.title = title
+            }
+            if button.font !== runningFont {
+                button.font = runningFont
+            }
         } else {
-            button.title = ""
-            button.font = .systemFont(ofSize: NSFont.systemFontSize)
-            button.image = NSImage(systemSymbolName: "timer.circle", accessibilityDescription: "Task Time Tracker")
+            if !button.title.isEmpty {
+                button.title = ""
+            }
+            if button.font !== idleFont {
+                button.font = idleFont
+            }
+            if button.image !== idleImage {
+                button.image = idleImage
+            }
         }
     }
 }

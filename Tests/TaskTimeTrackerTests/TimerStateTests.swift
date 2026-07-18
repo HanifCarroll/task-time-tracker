@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import XCTest
 @testable import TaskTimeTracker
 
@@ -51,6 +52,73 @@ final class TimerStateTests: XCTestCase {
         XCTAssertFalse(state.tasks[0].isRunning)
         XCTAssertTrue(state.tasks[1].isRunning)
         XCTAssertEqual(state.activeTaskCount, 1)
+    }
+
+    @MainActor
+    func testToggleAllStartsThenPausesEveryTask() {
+        let state = TimerState(tasks: [
+            TaskTimer(title: "Meetup Tool"),
+            TaskTimer(title: "Proposal draft")
+        ])
+
+        state.toggleAllRunningTasks()
+        XCTAssertTrue(state.tasks.allSatisfy(\.isRunning))
+
+        state.toggleAllRunningTasks()
+        XCTAssertTrue(state.tasks.allSatisfy { !$0.isRunning })
+    }
+
+    @MainActor
+    func testResetAllStopsTimersAndClearsElapsedTime() throws {
+        let store = try makeTemporaryStore()
+        let state = TimerState(tasks: [
+            TaskTimer(title: "Meetup Tool", elapsedSeconds: 42),
+            TaskTimer(title: "Proposal draft", elapsedSeconds: 17)
+        ], workLogStore: store)
+
+        state.startAllTasks()
+        state.resetAllTasks()
+
+        XCTAssertTrue(state.tasks.allSatisfy { !$0.isRunning })
+        XCTAssertTrue(state.tasks.allSatisfy { $0.elapsedSeconds == 0 })
+        XCTAssertEqual(try store.eventCount(type: "timer_started"), 2)
+        XCTAssertEqual(try store.eventCount(type: "timer_stopped"), 2)
+    }
+
+    @MainActor
+    func testRunningDisplayUsesElapsedWallClockWithoutMutatingStoredElapsedTime() {
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+        let task = TaskTimer(
+            title: "Meetup Tool",
+            elapsedSeconds: 10,
+            isRunning: true,
+            startedAt: startedAt
+        )
+        let state = TimerState(tasks: [task])
+        defer { state.pauseTask(task.id) }
+
+        XCTAssertEqual(state.displaySeconds(for: task, at: startedAt.addingTimeInterval(7)), 17)
+        XCTAssertEqual(state.tasks[0].elapsedSeconds, 10)
+    }
+
+    @MainActor
+    func testRunningTicksDoNotRepublishTheTaskArray() async throws {
+        let task = TaskTimer(title: "Meetup Tool")
+        let state = TimerState(tasks: [task])
+        var taskArrayPublicationCount = 0
+        let cancellable = state.$tasks
+            .dropFirst()
+            .sink { _ in
+                taskArrayPublicationCount += 1
+            }
+
+        state.startTask(task.id)
+        let publicationCountAfterStart = taskArrayPublicationCount
+        try await Task.sleep(for: .seconds(2.2))
+
+        XCTAssertEqual(taskArrayPublicationCount, publicationCountAfterStart)
+        state.pauseTask(task.id)
+        withExtendedLifetime(cancellable) {}
     }
 
     @MainActor

@@ -129,7 +129,11 @@ final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowD
             width: targetFrameWidth,
             height: targetFrameHeight
         )
-        panel.setFrame(targetFrame, display: true, animate: false)
+        let frameChanged = abs(panel.frame.width - targetFrame.width) > 0.5
+            || abs(panel.frame.height - targetFrame.height) > 0.5
+        guard frameChanged else { return }
+
+        panel.setFrame(targetFrame, display: panel.isVisible, animate: false)
         saveSize(targetContentSize)
     }
 
@@ -193,8 +197,12 @@ final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowD
 
     private func bindStateSizing() {
         state.$tasks
-            .sink { [weak self] _ in
-                self?.scheduleFitHeightToTasks()
+            .map { TimerPanelSizing.contentHeight(for: $0) }
+            .removeDuplicates()
+            .sink { [weak self] contentHeight in
+                DispatchQueue.main.async {
+                    self?.fitHeightToContent(contentHeight)
+                }
             }
             .store(in: &cancellables)
     }
