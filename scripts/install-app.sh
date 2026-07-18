@@ -13,6 +13,7 @@ LEGACY_BUNDLE_PATH="$APP_DIR/$APP_NAME.app"
 CONTENTS_DIR="$BUNDLE_PATH/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+ICON_SOURCE="$REPO_ROOT/Resources/TaskTimeTracker.icns"
 WAS_RUNNING=0
 
 if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
@@ -25,6 +26,7 @@ swift build -c "$BUILD_CONFIG"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$EXECUTABLE_PATH" "$MACOS_DIR/$APP_NAME"
 chmod +x "$MACOS_DIR/$APP_NAME"
+cp "$ICON_SOURCE" "$RESOURCES_DIR/$APP_NAME.icns"
 
 if [[ "$LEGACY_BUNDLE_PATH" != "$BUNDLE_PATH" && -d "$LEGACY_BUNDLE_PATH" ]]; then
 	rm -rf "$LEGACY_BUNDLE_PATH"
@@ -47,6 +49,8 @@ cat >"$CONTENTS_DIR/Info.plist" <<PLIST
   <string>$APP_DISPLAY_NAME</string>
   <key>CFBundleDisplayName</key>
   <string>$APP_DISPLAY_NAME</string>
+  <key>CFBundleIconFile</key>
+  <string>$APP_NAME</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

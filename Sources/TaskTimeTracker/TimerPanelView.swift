@@ -352,31 +352,19 @@ private struct TaskTitleEditor: View {
 
     @State private var draftTitle = ""
     @State private var isEditing = false
-    @FocusState private var isFocused: Bool
 
     var body: some View {
         Group {
             if isEditing {
-                TextField("Task", text: $draftTitle)
+                TaskTitleEditField(text: $draftTitle, onCommit: endEditing)
                     .accessibilityLabel("Task")
-                    .textFieldStyle(.plain)
-                    .focused($isFocused)
-                    .onSubmit(endEditing)
-                    .onChange(of: isFocused) { _, focused in
-                        if !focused {
-                            endEditing()
-                        }
-                    }
-                    .onAppear {
-                        DispatchQueue.main.async {
-                            isFocused = true
-                        }
-                    }
             } else {
                 Text(displayTitle)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .help("Edit task name")
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .help(displayTitle)
                     .onTapGesture {
                         state.selectTask(task.id)
                         draftTitle = task.title
@@ -397,7 +385,144 @@ private struct TaskTitleEditor: View {
         if draftTitle != task.title {
             state.setTitle(for: task.id, draftTitle)
         }
-        isFocused = false
         isEditing = false
+    }
+}
+
+private struct TaskTitleEditField: NSViewRepresentable {
+    @Binding var text: String
+    let onCommit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, onCommit: onCommit)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = NSTextField(string: text)
+        textField.delegate = context.coordinator
+        textField.isBordered = false
+        textField.isBezeled = false
+        textField.drawsBackground = false
+        textField.focusRingType = .none
+        textField.font = .systemFont(ofSize: 12, weight: .semibold)
+        textField.lineBreakMode = .byTruncatingTail
+        textField.usesSingleLineMode = true
+        textField.cell?.isScrollable = true
+        textField.cell?.wraps = false
+        textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        context.coordinator.textField = textField
+        context.coordinator.installOutsideClickMonitors()
+        focus(textField)
+        return textField
+    }
+
+    func updateNSView(_ textField: NSTextField, context: Context) {
+        context.coordinator.text = $text
+        context.coordinator.onCommit = onCommit
+        context.coordinator.textField = textField
+        context.coordinator.installOutsideClickMonitors()
+
+        if textField.stringValue != text {
+            textField.stringValue = text
+        }
+    }
+
+    static func dismantleNSView(_ nsView: NSTextField, coordinator: Coordinator) {
+        coordinator.removeOutsideClickMonitors()
+    }
+
+    private func focus(_ textField: NSTextField) {
+        DispatchQueue.main.async {
+            guard textField.currentEditor() == nil else { return }
+            textField.window?.makeFirstResponder(textField)
+        }
+    }
+
+    @MainActor final class Coordinator: NSObject, NSTextFieldDelegate {
+        var text: Binding<String>
+        var onCommit: () -> Void
+        weak var textField: NSTextField?
+
+        private var localMouseDownMonitor: Any?
+        private var globalMouseDownMonitor: Any?
+        private var isCommitting = false
+
+        init(text: Binding<String>, onCommit: @escaping () -> Void) {
+            self.text = text
+            self.onCommit = onCommit
+        }
+
+        func installOutsideClickMonitors() {
+            if localMouseDownMonitor == nil {
+                localMouseDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                    self?.commitIfClickIsOutsideField(event)
+                    return event
+                }
+            }
+
+            if globalMouseDownMonitor == nil {
+                globalMouseDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                    self?.commitCurrentText()
+                }
+            }
+        }
+
+        func removeOutsideClickMonitors() {
+            if let localMouseDownMonitor {
+                NSEvent.removeMonitor(localMouseDownMonitor)
+                self.localMouseDownMonitor = nil
+            }
+
+            if let globalMouseDownMonitor {
+                NSEvent.removeMonitor(globalMouseDownMonitor)
+                self.globalMouseDownMonitor = nil
+            }
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let textField = notification.object as? NSTextField else { return }
+            text.wrappedValue = textField.stringValue
+        }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            if let textField = notification.object as? NSTextField {
+                text.wrappedValue = textField.stringValue
+            }
+            commitCurrentText()
+        }
+
+        func control(
+            _ control: NSControl,
+            textView: NSTextView,
+            doCommandBy commandSelector: Selector
+        ) -> Bool {
+            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else {
+                return false
+            }
+
+            text.wrappedValue = textView.string
+            commitCurrentText()
+            return true
+        }
+
+        private func commitIfClickIsOutsideField(_ event: NSEvent) {
+            guard let textField, event.window === textField.window else { return }
+
+            let locationInField = textField.convert(event.locationInWindow, from: nil)
+            guard !textField.bounds.contains(locationInField) else { return }
+
+            commitCurrentText()
+        }
+
+        private func commitCurrentText() {
+            guard !isCommitting else { return }
+            isCommitting = true
+            if let textField {
+                text.wrappedValue = textField.stringValue
+            }
+            removeOutsideClickMonitors()
+            onCommit()
+            isCommitting = false
+        }
     }
 }
