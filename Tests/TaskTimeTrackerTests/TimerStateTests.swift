@@ -215,7 +215,7 @@ final class TimerStateTests: XCTestCase {
     }
 
     @MainActor
-    func testDroppingTaskOnAnotherRowUsesTheDragDirection() {
+    func testMovingTaskOffsetsSupportsUpwardAndDownwardMoves() {
         let tasks = [
             TaskTimer(title: "First"),
             TaskTimer(title: "Second"),
@@ -223,10 +223,10 @@ final class TimerStateTests: XCTestCase {
         ]
         let state = TimerState(tasks: tasks)
 
-        state.reorderTask(tasks[2].id, byDroppingOn: tasks[0].id)
+        state.moveTasks(fromOffsets: IndexSet(integer: 2), toOffset: 0)
         XCTAssertEqual(state.tasks.map(\.id), [tasks[2].id, tasks[0].id, tasks[1].id])
 
-        state.reorderTask(tasks[2].id, byDroppingOn: tasks[1].id)
+        state.moveTasks(fromOffsets: IndexSet(integer: 0), toOffset: 3)
         XCTAssertEqual(state.tasks.map(\.id), [tasks[0].id, tasks[1].id, tasks[2].id])
     }
 

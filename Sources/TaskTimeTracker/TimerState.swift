@@ -218,25 +218,27 @@ final class TimerState: ObservableObject {
         guard let sourceIndex = tasks.firstIndex(where: { $0.id == id }) else { return }
 
         let boundedOffset = min(max(destinationOffset, tasks.startIndex), tasks.endIndex)
-        let insertionIndex = boundedOffset > sourceIndex ? boundedOffset - 1 : boundedOffset
-        guard insertionIndex != sourceIndex else { return }
-
-        var updatedTasks = tasks
-        let task = updatedTasks.remove(at: sourceIndex)
-        updatedTasks.insert(task, at: insertionIndex)
-        tasks = updatedTasks
-        persist { try workLogStore?.updateTaskOrder(updatedTasks.map(\.id)) }
+        moveTasks(fromOffsets: IndexSet(integer: sourceIndex), toOffset: boundedOffset)
     }
 
-    func reorderTask(_ id: TaskTimer.ID, byDroppingOn targetID: TaskTimer.ID) {
-        guard let sourceIndex = tasks.firstIndex(where: { $0.id == id }),
-              let targetIndex = tasks.firstIndex(where: { $0.id == targetID }),
-              sourceIndex != targetIndex else {
-            return
+    func moveTasks(fromOffsets sourceOffsets: IndexSet, toOffset destinationOffset: Int) {
+        guard !sourceOffsets.isEmpty,
+              sourceOffsets.allSatisfy({ tasks.indices.contains($0) }) else { return }
+
+        let boundedOffset = min(max(destinationOffset, tasks.startIndex), tasks.endIndex)
+        let movingTasks = sourceOffsets.map { tasks[$0] }
+        var updatedTasks = tasks
+        for sourceOffset in sourceOffsets.reversed() {
+            updatedTasks.remove(at: sourceOffset)
         }
 
-        let destinationOffset = sourceIndex < targetIndex ? targetIndex + 1 : targetIndex
-        moveTask(id, toOffset: destinationOffset)
+        let removedBeforeDestination = sourceOffsets.lazy.filter { $0 < boundedOffset }.count
+        let insertionIndex = boundedOffset - removedBeforeDestination
+        updatedTasks.insert(contentsOf: movingTasks, at: insertionIndex)
+        guard updatedTasks != tasks else { return }
+
+        tasks = updatedTasks
+        persist { try workLogStore?.updateTaskOrder(updatedTasks.map(\.id)) }
     }
 
     func moveTaskUp(_ id: TaskTimer.ID) {
