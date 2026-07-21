@@ -255,6 +255,27 @@ final class TimerState: ObservableObject {
         persist { try workLogStore?.updateTaskOrder(orderedTaskIDs) }
     }
 
+    func moveTasks(_ taskIDs: [TaskTimer.ID], before destinationID: TaskTimer.ID?) {
+        guard !taskIDs.isEmpty, Set(taskIDs).count == taskIDs.count else { return }
+
+        let tasksByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        guard taskIDs.allSatisfy({ tasksByID[$0] != nil }) else { return }
+
+        let movingIDs = Set(taskIDs)
+        guard destinationID.map({ tasksByID[$0] != nil && !movingIDs.contains($0) }) ?? true else {
+            return
+        }
+
+        let movingTasks = taskIDs.compactMap { tasksByID[$0] }
+        var updatedTasks = tasks.filter { !movingIDs.contains($0.id) }
+        let insertionIndex = destinationID.flatMap { destinationID in
+            updatedTasks.firstIndex(where: { $0.id == destinationID })
+        } ?? updatedTasks.endIndex
+        updatedTasks.insert(contentsOf: movingTasks, at: insertionIndex)
+
+        commitTaskOrder(updatedTasks.map(\.id))
+    }
+
     func moveTaskUp(_ id: TaskTimer.ID) {
         guard let index = tasks.firstIndex(where: { $0.id == id }), index > tasks.startIndex else {
             return

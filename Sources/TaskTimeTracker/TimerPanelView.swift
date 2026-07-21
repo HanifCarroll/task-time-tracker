@@ -1,7 +1,5 @@
 import SwiftUI
 
-private let taskListCoordinateSpace = "TaskTimeTracker.taskList"
-
 enum TimerPanelSizing {
     static let minimumWidth: CGFloat = 390
     static let minimumHeight: CGFloat = 82
@@ -22,70 +20,9 @@ enum TimerPanelSizing {
     }
 }
 
-enum TaskReorderDragLayout {
-    static let hysteresis: CGFloat = 6
-
-    static func destinationIndex(
-        currentIndex: Int,
-        draggedCenter: CGFloat,
-        slotCenters: [CGFloat],
-        hysteresis: CGFloat = hysteresis
-    ) -> Int {
-        guard slotCenters.indices.contains(currentIndex) else { return currentIndex }
-
-        var destinationIndex = currentIndex
-        while destinationIndex < slotCenters.index(before: slotCenters.endIndex) {
-            let nextIndex = destinationIndex + 1
-            let boundary = (slotCenters[destinationIndex] + slotCenters[nextIndex]) / 2 + hysteresis
-            guard draggedCenter > boundary else { break }
-            destinationIndex = nextIndex
-        }
-
-        while destinationIndex > slotCenters.startIndex {
-            let previousIndex = destinationIndex - 1
-            let boundary = (slotCenters[previousIndex] + slotCenters[destinationIndex]) / 2 - hysteresis
-            guard draggedCenter < boundary else { break }
-            destinationIndex = previousIndex
-        }
-
-        return destinationIndex
-    }
-
-    static func positionCompensation<ID: Hashable>(
-        initialIndex: Int,
-        currentIndex: Int,
-        order: [ID],
-        rowSpans: [ID: CGFloat]
-    ) -> CGFloat {
-        guard order.indices.contains(initialIndex), order.indices.contains(currentIndex) else { return 0 }
-
-        if currentIndex > initialIndex {
-            return -order[initialIndex..<currentIndex].reduce(CGFloat.zero) {
-                $0 + (rowSpans[$1] ?? 0)
-            }
-        }
-
-        if currentIndex < initialIndex {
-            return order[(currentIndex + 1)...initialIndex].reduce(CGFloat.zero) {
-                $0 + (rowSpans[$1] ?? 0)
-            }
-        }
-
-        return 0
-    }
-}
-
 struct TimerPanelView: View {
     @ObservedObject var state: TimerState
     let windowController: FloatingTimerWindowController
-
-    @State private var draggedTaskID: TaskTimer.ID?
-    @State private var dragTranslation: CGFloat = 0
-    @State private var dragInitialIndex: Int?
-    @State private var dragPreviewOrder: [TaskTimer.ID] = []
-    @State private var dragSlotCenters: [CGFloat] = []
-    @State private var dragRowSpans: [TaskTimer.ID: CGFloat] = [:]
-    @State private var taskRowFrames: [TaskTimer.ID: CGRect] = [:]
 
     var body: some View {
         VStack(spacing: 6) {
@@ -151,122 +88,27 @@ struct TimerPanelView: View {
     private var taskList: some View {
         ScrollView {
             VStack(spacing: TimerPanelSizing.taskSpacing) {
-                ForEach(displayedTaskIDs, id: \.self) { taskID in
-                    if let taskBinding = taskBinding(for: taskID) {
-                        let task = taskBinding.wrappedValue
-                        let isDragging = draggedTaskID == task.id
-                        let dragOffset = dragOffset(for: task.id)
-                        TaskTimerRow(
-                            task: taskBinding,
-                            isSelected: task.id == state.selectedTaskID,
-                            state: state,
-                            onReorderDragChanged: { value in
-                                updateReorderDrag(for: task.id, value: value)
-                            },
-                            onReorderDragFinished: {
-                                endReorderDrag(for: task.id)
-                            }
-                        )
-                        .background {
-                            GeometryReader { geometry in
-                                Color.clear.preference(
-                                    key: TaskRowFramePreferenceKey.self,
-                                    value: [task.id: geometry.frame(in: .named(taskListCoordinateSpace))]
-                                )
-                            }
-                        }
-                        .offset(y: dragOffset)
-                        .transaction { transaction in
-                            if isDragging {
-                                transaction.animation = nil
-                            }
-                        }
-                        .zIndex(isDragging ? 1 : 0)
-                        .shadow(
-                            color: .black.opacity(isDragging ? 0.16 : 0),
-                            radius: isDragging ? 6 : 0,
-                            y: isDragging ? 2 : 0
-                        )
-                    }
+                ForEach(state.tasks) { task in
+                    TaskTimerRow(
+                        task: task,
+                        isSelected: task.id == state.selectedTaskID,
+                        state: state
+                    )
                 }
+                .reorderable()
             }
         }
-        .coordinateSpace(name: taskListCoordinateSpace)
-        .onPreferenceChange(TaskRowFramePreferenceKey.self) { taskRowFrames = $0 }
+        .reorderContainer(for: TaskTimer.self) { difference in
+            let destinationID: TaskTimer.ID?
+            switch difference.destination.position {
+            case .before(let taskID):
+                destinationID = taskID
+            case .end:
+                destinationID = nil
+            }
+            state.moveTasks(difference.sources, before: destinationID)
+        }
         .scrollIndicators(.hidden)
-    }
-
-    private func updateReorderDrag(for taskID: TaskTimer.ID, value: DragGesture.Value) {
-        guard draggedTaskID == nil || draggedTaskID == taskID else { return }
-        if draggedTaskID == nil {
-            let initialOrder = state.tasks.map(\.id)
-            guard let initialIndex = initialOrder.firstIndex(of: taskID),
-                  initialOrder.allSatisfy({ taskRowFrames[$0] != nil }) else { return }
-
-            draggedTaskID = taskID
-            dragInitialIndex = initialIndex
-            dragPreviewOrder = initialOrder
-            dragSlotCenters = initialOrder.compactMap { taskRowFrames[$0]?.midY }
-            dragRowSpans = Dictionary(uniqueKeysWithValues: initialOrder.compactMap { id in
-                taskRowFrames[id].map { (id, $0.height + TimerPanelSizing.taskSpacing) }
-            })
-            state.selectTask(taskID)
-        }
-
-        dragTranslation = value.translation.height
-        guard let initialIndex = dragInitialIndex,
-              dragSlotCenters.indices.contains(initialIndex),
-              let sourceIndex = dragPreviewOrder.firstIndex(of: taskID) else { return }
-
-        let draggedCenter = dragSlotCenters[initialIndex] + dragTranslation
-        let destinationIndex = TaskReorderDragLayout.destinationIndex(
-            currentIndex: sourceIndex,
-            draggedCenter: draggedCenter,
-            slotCenters: dragSlotCenters
-        )
-        guard destinationIndex != sourceIndex else { return }
-
-        var updatedOrder = dragPreviewOrder
-        let movedTaskID = updatedOrder.remove(at: sourceIndex)
-        updatedOrder.insert(movedTaskID, at: destinationIndex)
-        withAnimation(.easeOut(duration: 0.12)) {
-            dragPreviewOrder = updatedOrder
-        }
-    }
-
-    private func endReorderDrag(for taskID: TaskTimer.ID) {
-        guard draggedTaskID == taskID else { return }
-        state.commitTaskOrder(dragPreviewOrder)
-        withAnimation(.easeOut(duration: 0.12)) {
-            draggedTaskID = nil
-            dragTranslation = 0
-            dragInitialIndex = nil
-            dragPreviewOrder = []
-            dragSlotCenters = []
-            dragRowSpans = [:]
-        }
-    }
-
-    private func dragOffset(for taskID: TaskTimer.ID) -> CGFloat {
-        guard draggedTaskID == taskID,
-              let initialIndex = dragInitialIndex,
-              let currentIndex = dragPreviewOrder.firstIndex(of: taskID) else { return 0 }
-
-        return dragTranslation + TaskReorderDragLayout.positionCompensation(
-            initialIndex: initialIndex,
-            currentIndex: currentIndex,
-            order: dragPreviewOrder,
-            rowSpans: dragRowSpans
-        )
-    }
-
-    private var displayedTaskIDs: [TaskTimer.ID] {
-        dragPreviewOrder.isEmpty ? state.tasks.map(\.id) : dragPreviewOrder
-    }
-
-    private func taskBinding(for taskID: TaskTimer.ID) -> Binding<TaskTimer>? {
-        guard let index = state.tasks.firstIndex(where: { $0.id == taskID }) else { return nil }
-        return $state.tasks[index]
     }
 
     private func headerButton(
@@ -291,15 +133,12 @@ struct TimerPanelView: View {
 }
 
 private struct TaskTimerRow: View {
-    @Binding var task: TaskTimer
+    let task: TaskTimer
     let isSelected: Bool
     @ObservedObject var state: TimerState
-    let onReorderDragChanged: (DragGesture.Value) -> Void
-    let onReorderDragFinished: () -> Void
 
     @State private var timeEditorText = ""
     @State private var isHovered = false
-    @GestureState private var isReorderGestureActive = false
     @FocusState private var isTimeEditorFocused: Bool
 
     var body: some View {
@@ -369,19 +208,6 @@ private struct TaskTimerRow: View {
             .foregroundStyle(.tertiary)
             .frame(width: 10, height: 20)
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 2, coordinateSpace: .named(taskListCoordinateSpace))
-                    .updating($isReorderGestureActive) { _, isActive, _ in
-                        isActive = true
-                    }
-                    .onChanged(onReorderDragChanged)
-                    .onEnded { _ in onReorderDragFinished() }
-            )
-            .onChange(of: isReorderGestureActive) { wasActive, isActive in
-                if wasActive, !isActive {
-                    onReorderDragFinished()
-                }
-            }
             .help("Drag to reorder")
             .accessibilityLabel("Reorder \(displayTitle)")
             .accessibilityAction(named: "Move up") {
@@ -567,14 +393,6 @@ private struct TaskTimerRow: View {
         }
         .buttonStyle(.plain)
         .help(help)
-    }
-}
-
-private struct TaskRowFramePreferenceKey: PreferenceKey {
-    static let defaultValue: [TaskTimer.ID: CGRect] = [:]
-
-    static func reduce(value: inout [TaskTimer.ID: CGRect], nextValue: () -> [TaskTimer.ID: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, newValue in newValue })
     }
 }
 

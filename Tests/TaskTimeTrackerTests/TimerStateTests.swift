@@ -231,7 +231,7 @@ final class TimerStateTests: XCTestCase {
     }
 
     @MainActor
-    func testCommittedDragOrderPersistsOnceTheDragFinishes() throws {
+    func testNativeReorderDifferencePersistsOnceTheDragFinishes() throws {
         let store = try makeTemporaryStore()
         let tasks = [
             TaskTimer(title: "First"),
@@ -240,63 +240,24 @@ final class TimerStateTests: XCTestCase {
         ]
         let state = TimerState(tasks: tasks, workLogStore: store)
 
-        state.commitTaskOrder([tasks[2].id, tasks[0].id, tasks[1].id])
+        state.moveTasks([tasks[2].id], before: tasks[0].id)
 
         XCTAssertEqual(state.tasks.map(\.id), [tasks[2].id, tasks[0].id, tasks[1].id])
         XCTAssertEqual(try store.loadCurrentTasks().map(\.id), state.tasks.map(\.id))
     }
 
-    func testReorderDragUsesHysteresisAroundRowBoundary() {
-        let centers: [CGFloat] = [0, 34]
+    @MainActor
+    func testNativeReorderDifferenceCanMoveTasksToTheEnd() {
+        let tasks = [
+            TaskTimer(title: "First"),
+            TaskTimer(title: "Second"),
+            TaskTimer(title: "Third")
+        ]
+        let state = TimerState(tasks: tasks)
 
-        XCTAssertEqual(
-            TaskReorderDragLayout.destinationIndex(
-                currentIndex: 0,
-                draggedCenter: 22.9,
-                slotCenters: centers
-            ),
-            0
-        )
-        XCTAssertEqual(
-            TaskReorderDragLayout.destinationIndex(
-                currentIndex: 0,
-                draggedCenter: 23.1,
-                slotCenters: centers
-            ),
-            1
-        )
-        XCTAssertEqual(
-            TaskReorderDragLayout.destinationIndex(
-                currentIndex: 1,
-                draggedCenter: 11.1,
-                slotCenters: centers
-            ),
-            1
-        )
-        XCTAssertEqual(
-            TaskReorderDragLayout.destinationIndex(
-                currentIndex: 1,
-                draggedCenter: 10.9,
-                slotCenters: centers
-            ),
-            0
-        )
-    }
+        state.moveTasks([tasks[0].id], before: nil)
 
-    func testReorderDragCompensatesForRowsCrossedDuringLivePreview() {
-        let draggedID = UUID()
-        let crossedID = UUID()
-        let order = [crossedID, draggedID]
-
-        XCTAssertEqual(
-            TaskReorderDragLayout.positionCompensation(
-                initialIndex: 0,
-                currentIndex: 1,
-                order: order,
-                rowSpans: [crossedID: 39, draggedID: 34]
-            ),
-            -39
-        )
+        XCTAssertEqual(state.tasks.map(\.id), [tasks[1].id, tasks[2].id, tasks[0].id])
     }
 
     @MainActor

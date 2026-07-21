@@ -21,8 +21,8 @@ A minimalist macOS menu bar timer for keeping track of the tasks you are working
 
 ## Requirements
 
-- macOS 14 or newer
-- Xcode / Swift toolchain
+- macOS 27 or newer
+- Xcode 27 or newer with Swift 6.4
 
 ## Build
 
