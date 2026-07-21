@@ -214,6 +214,44 @@ final class TimerState: ObservableObject {
         selectedTaskID = id
     }
 
+    func moveTask(_ id: TaskTimer.ID, toOffset destinationOffset: Int) {
+        guard let sourceIndex = tasks.firstIndex(where: { $0.id == id }) else { return }
+
+        let boundedOffset = min(max(destinationOffset, tasks.startIndex), tasks.endIndex)
+        let insertionIndex = boundedOffset > sourceIndex ? boundedOffset - 1 : boundedOffset
+        guard insertionIndex != sourceIndex else { return }
+
+        var updatedTasks = tasks
+        let task = updatedTasks.remove(at: sourceIndex)
+        updatedTasks.insert(task, at: insertionIndex)
+        tasks = updatedTasks
+        persist { try workLogStore?.updateTaskOrder(updatedTasks.map(\.id)) }
+    }
+
+    func moveTaskUp(_ id: TaskTimer.ID) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }), index > tasks.startIndex else {
+            return
+        }
+        moveTask(id, toOffset: index - 1)
+    }
+
+    func moveTaskDown(_ id: TaskTimer.ID) {
+        guard let index = tasks.firstIndex(where: { $0.id == id }), index < tasks.index(before: tasks.endIndex) else {
+            return
+        }
+        moveTask(id, toOffset: index + 2)
+    }
+
+    func canMoveTaskUp(_ id: TaskTimer.ID) -> Bool {
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { return false }
+        return index > tasks.startIndex
+    }
+
+    func canMoveTaskDown(_ id: TaskTimer.ID) -> Bool {
+        guard let index = tasks.firstIndex(where: { $0.id == id }), !tasks.isEmpty else { return false }
+        return index < tasks.index(before: tasks.endIndex)
+    }
+
     func setTitle(for id: TaskTimer.ID, _ title: String) {
         var updatedTasks = tasks
         guard let index = updatedTasks.firstIndex(where: { $0.id == id }) else { return }

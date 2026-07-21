@@ -11,6 +11,7 @@ A minimalist macOS menu bar timer for keeping track of the tasks you are working
 - Count-up “Free Time” mode.
 - Countdown mode with a configurable duration.
 - Independent timer/countdown mode per task.
+- Drag-and-drop task reordering with the order preserved across launches.
 - SQLite work history for reports and multitasking analysis.
 - Row deletion archives tasks without deleting historical intervals.
 - Movable and resizable UI window.
@@ -57,7 +58,7 @@ The app stores reportable work history in SQLite:
 
 The database is optimized for later reporting:
 
-- `tasks` stores current task rows. Deleting a row sets `archived_at_ms`; it does not remove history.
+- `tasks` stores current task rows and their display order. Deleting a row sets `archived_at_ms`; it does not remove history.
 - `work_intervals` stores one row per start/stop interval, with a `title_snapshot`, mode, start time, end time, and stop reason.
 - `task_events` stores task lifecycle events such as create, rename, mode change, start, stop, and archive.
 - Timestamps are Unix milliseconds in UTC.

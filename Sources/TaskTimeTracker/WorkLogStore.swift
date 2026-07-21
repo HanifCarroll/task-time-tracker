@@ -72,7 +72,7 @@ final class WorkLogStore {
                 SELECT id, current_title, current_mode, current_countdown_seconds
                 FROM tasks
                 WHERE archived_at_ms IS NULL
-                ORDER BY created_at_ms ASC
+                ORDER BY display_order ASC, created_at_ms ASC, id ASC
                 """
             )
 
@@ -168,6 +168,27 @@ final class WorkLogStore {
                 ],
                 in: db
             )
+        }
+    }
+
+    func updateTaskOrder(_ taskIDs: [UUID], at date: Date = Date()) throws {
+        let atMS = Self.timestampMilliseconds(date)
+        try dbQueue.write { db in
+            for (displayOrder, taskID) in taskIDs.enumerated() {
+                try db.execute(
+                    sql: """
+                    UPDATE tasks
+                    SET display_order = :displayOrder,
+                        updated_at_ms = :updatedAtMS
+                    WHERE id = :id AND archived_at_ms IS NULL
+                    """,
+                    arguments: [
+                        "id": taskID.uuidString,
+                        "displayOrder": displayOrder,
+                        "updatedAtMS": atMS
+                    ]
+                )
+            }
         }
     }
 
@@ -377,6 +398,25 @@ final class WorkLogStore {
                 ON task_events(task_id, at_ms);
             """)
         }
+        migrator.registerMigration("addTaskDisplayOrder") { db in
+            try db.execute(sql: """
+            ALTER TABLE tasks
+                ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0;
+
+            WITH ordered_tasks AS (
+                SELECT
+                    id,
+                    ROW_NUMBER() OVER (ORDER BY created_at_ms ASC, id ASC) - 1 AS display_order
+                FROM tasks
+            )
+            UPDATE tasks
+            SET display_order = (
+                SELECT ordered_tasks.display_order
+                FROM ordered_tasks
+                WHERE ordered_tasks.id = tasks.id
+            );
+            """)
+        }
         return migrator
     }
 
@@ -394,6 +434,7 @@ final class WorkLogStore {
 
     private func upsertTask(_ task: TaskTimer, at date: Date, in db: Database) throws {
         let atMS = Self.timestampMilliseconds(date)
+        let displayOrder = try taskDisplayOrder(for: task.id, in: db)
         try db.execute(
             sql: """
             INSERT INTO tasks (
@@ -401,6 +442,7 @@ final class WorkLogStore {
                 current_title,
                 current_mode,
                 current_countdown_seconds,
+                display_order,
                 created_at_ms,
                 updated_at_ms,
                 archived_at_ms
@@ -409,6 +451,7 @@ final class WorkLogStore {
                 :title,
                 :mode,
                 :countdownSeconds,
+                :displayOrder,
                 :createdAtMS,
                 :updatedAtMS,
                 NULL
@@ -425,10 +468,30 @@ final class WorkLogStore {
                 "title": task.title,
                 "mode": task.mode.storageValue,
                 "countdownSeconds": task.countdownSeconds,
+                "displayOrder": displayOrder,
                 "createdAtMS": atMS,
                 "updatedAtMS": atMS
             ]
         )
+    }
+
+    private func taskDisplayOrder(for taskID: UUID, in db: Database) throws -> Int {
+        if let displayOrder = try Int.fetchOne(
+            db,
+            sql: "SELECT display_order FROM tasks WHERE id = ?",
+            arguments: [taskID.uuidString]
+        ) {
+            return displayOrder
+        }
+
+        return try Int.fetchOne(
+            db,
+            sql: """
+            SELECT COALESCE(MAX(display_order), -1) + 1
+            FROM tasks
+            WHERE archived_at_ms IS NULL
+            """
+        ) ?? 0
     }
 
     private func insertEvent(

@@ -192,6 +192,47 @@ final class TimerStateTests: XCTestCase {
         XCTAssertEqual(try store.eventCount(type: "task_renamed"), 1)
     }
 
+    @MainActor
+    func testMovingTaskReordersTasksWithoutChangingSelection() {
+        let tasks = [
+            TaskTimer(title: "First"),
+            TaskTimer(title: "Second"),
+            TaskTimer(title: "Third")
+        ]
+        let state = TimerState(tasks: tasks)
+        state.selectTask(tasks[1].id)
+
+        state.moveTask(tasks[2].id, toOffset: 0)
+
+        XCTAssertEqual(state.tasks.map(\.id), [tasks[2].id, tasks[0].id, tasks[1].id])
+        XCTAssertEqual(state.selectedTaskID, tasks[1].id)
+
+        state.moveTaskDown(tasks[2].id)
+        XCTAssertEqual(state.tasks.map(\.id), [tasks[0].id, tasks[2].id, tasks[1].id])
+
+        state.moveTaskUp(tasks[1].id)
+        XCTAssertEqual(state.tasks.map(\.id), [tasks[0].id, tasks[1].id, tasks[2].id])
+    }
+
+    @MainActor
+    func testMovedTaskOrderPersistsAndNewTasksAppend() throws {
+        let store = try makeTemporaryStore()
+        let tasks = [
+            TaskTimer(title: "First"),
+            TaskTimer(title: "Second"),
+            TaskTimer(title: "Third")
+        ]
+        let state = TimerState(tasks: tasks, workLogStore: store)
+
+        state.moveTask(tasks[2].id, toOffset: 0)
+        state.addTask()
+
+        XCTAssertEqual(
+            try store.loadCurrentTasks().map(\.id),
+            [tasks[2].id, tasks[0].id, tasks[1].id, state.tasks.last?.id].compactMap { $0 }
+        )
+    }
+
     func testWindowSizingRestoresMinimumWidthAndFitsContentHeight() {
         let restoredSize = FloatingTimerWindowSizing.restoredSize(
             savedWidth: 430,

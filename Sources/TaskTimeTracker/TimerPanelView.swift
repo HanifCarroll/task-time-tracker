@@ -95,6 +95,16 @@ struct TimerPanelView: View {
                         state: state
                     )
                 }
+                .dropDestination(for: String.self) { taskIdentifiers, destinationOffset in
+                    guard let taskIdentifier = taskIdentifiers.first,
+                          let taskID = UUID(uuidString: taskIdentifier) else {
+                        return
+                    }
+
+                    withAnimation(.snappy) {
+                        state.moveTask(taskID, toOffset: destinationOffset)
+                    }
+                }
             }
         }
         .scrollIndicators(.hidden)
@@ -133,6 +143,8 @@ private struct TaskTimerRow: View {
     var body: some View {
         VStack(spacing: 3) {
             HStack(alignment: .center, spacing: 6) {
+                dragHandle
+
                 statusDot
 
                 TaskTitleEditor(task: task, state: state)
@@ -165,12 +177,57 @@ private struct TaskTimerRow: View {
             isHovered = hovering
         }
         .contextMenu {
+            Button {
+                state.moveTaskUp(task.id)
+            } label: {
+                Label("Move Up", systemImage: "arrow.up")
+            }
+            .disabled(!state.canMoveTaskUp(task.id))
+
+            Button {
+                state.moveTaskDown(task.id)
+            } label: {
+                Label("Move Down", systemImage: "arrow.down")
+            }
+            .disabled(!state.canMoveTaskDown(task.id))
+
+            Divider()
+
             Button(role: .destructive) {
                 state.deleteTask(task.id)
             } label: {
                 Label("Delete Task", systemImage: "trash")
             }
         }
+    }
+
+    private var dragHandle: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.tertiary)
+            .frame(width: 10, height: 20)
+            .contentShape(Rectangle())
+            .draggable(task.id.uuidString) {
+                Text(displayTitle)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .help("Drag to reorder")
+            .accessibilityLabel("Reorder \(displayTitle)")
+            .accessibilityAction(named: "Move up") {
+                state.moveTaskUp(task.id)
+            }
+            .accessibilityAction(named: "Move down") {
+                state.moveTaskDown(task.id)
+            }
+    }
+
+    private var displayTitle: String {
+        let trimmed = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Untitled task" : trimmed
     }
 
     private var modePicker: some View {
