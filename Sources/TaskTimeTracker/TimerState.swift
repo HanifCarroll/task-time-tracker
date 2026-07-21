@@ -228,6 +228,17 @@ final class TimerState: ObservableObject {
         persist { try workLogStore?.updateTaskOrder(updatedTasks.map(\.id)) }
     }
 
+    func reorderTask(_ id: TaskTimer.ID, byDroppingOn targetID: TaskTimer.ID) {
+        guard let sourceIndex = tasks.firstIndex(where: { $0.id == id }),
+              let targetIndex = tasks.firstIndex(where: { $0.id == targetID }),
+              sourceIndex != targetIndex else {
+            return
+        }
+
+        let destinationOffset = sourceIndex < targetIndex ? targetIndex + 1 : targetIndex
+        moveTask(id, toOffset: destinationOffset)
+    }
+
     func moveTaskUp(_ id: TaskTimer.ID) {
         guard let index = tasks.firstIndex(where: { $0.id == id }), index > tasks.startIndex else {
             return
