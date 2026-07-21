@@ -231,6 +231,22 @@ final class TimerStateTests: XCTestCase {
     }
 
     @MainActor
+    func testDragMovePersistsAtEachRowCrossing() throws {
+        let store = try makeTemporaryStore()
+        let tasks = [
+            TaskTimer(title: "First"),
+            TaskTimer(title: "Second"),
+            TaskTimer(title: "Third")
+        ]
+        let state = TimerState(tasks: tasks, workLogStore: store)
+
+        state.moveTaskDuringDrag(tasks[2].id, toOffset: 0)
+
+        XCTAssertEqual(state.tasks.map(\.id), [tasks[2].id, tasks[0].id, tasks[1].id])
+        XCTAssertEqual(try store.loadCurrentTasks().map(\.id), state.tasks.map(\.id))
+    }
+
+    @MainActor
     func testMovedTaskOrderPersistsAndNewTasksAppend() throws {
         let store = try makeTemporaryStore()
         let tasks = [

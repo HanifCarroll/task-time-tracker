@@ -27,8 +27,9 @@ struct TimerPanelView: View {
     let windowController: FloatingTimerWindowController
 
     @State private var draggedTaskID: TaskTimer.ID?
-    @State private var dragTranslation: CGFloat = 0
-    @State private var dragStartCenter: CGFloat?
+    @State private var draggedTaskCenter: CGFloat?
+    @State private var dragPointerOffset: CGFloat = 0
+    @State private var dragSlotCenters: [CGFloat] = []
     @State private var taskRowFrames: [TaskTimer.ID: CGRect] = [:]
 
     var body: some View {
@@ -97,6 +98,7 @@ struct TimerPanelView: View {
             VStack(spacing: TimerPanelSizing.taskSpacing) {
                 ForEach($state.tasks) { $task in
                     let isDragging = draggedTaskID == task.id
+                    let dragOffset = dragOffset(for: task.id)
                     TaskTimerRow(
                         task: $task,
                         isSelected: task.id == state.selectedTaskID,
@@ -104,8 +106,8 @@ struct TimerPanelView: View {
                         onReorderDragChanged: { value in
                             updateReorderDrag(for: task.id, value: value)
                         },
-                        onReorderDragEnded: { value in
-                            finishReorderDrag(for: task.id, value: value)
+                        onReorderDragFinished: {
+                            endReorderDrag(for: task.id)
                         }
                     )
                     .background {
@@ -116,7 +118,7 @@ struct TimerPanelView: View {
                             )
                         }
                     }
-                    .offset(y: isDragging ? dragTranslation : 0)
+                    .offset(y: dragOffset)
                     .zIndex(isDragging ? 1 : 0)
                     .shadow(
                         color: .black.opacity(isDragging ? 0.16 : 0),
@@ -134,40 +136,44 @@ struct TimerPanelView: View {
     private func updateReorderDrag(for taskID: TaskTimer.ID, value: DragGesture.Value) {
         guard draggedTaskID == nil || draggedTaskID == taskID else { return }
         if draggedTaskID == nil {
+            guard let taskFrame = taskRowFrames[taskID] else { return }
             draggedTaskID = taskID
-            dragStartCenter = taskRowFrames[taskID]?.midY
+            dragPointerOffset = value.startLocation.y - taskFrame.midY
+            dragSlotCenters = taskRowFrames.values.map(\.midY).sorted()
             state.selectTask(taskID)
         }
-        dragTranslation = value.translation.height
-    }
 
-    private func finishReorderDrag(for taskID: TaskTimer.ID, value: DragGesture.Value) {
-        defer {
-            withAnimation(.snappy) {
-                draggedTaskID = nil
-                dragTranslation = 0
-                dragStartCenter = nil
-            }
-        }
-
-        guard draggedTaskID == taskID,
-              let sourceIndex = state.tasks.firstIndex(where: { $0.id == taskID }),
-              let dragStartCenter else {
+        let updatedCenter = value.location.y - dragPointerOffset
+        draggedTaskCenter = updatedCenter
+        guard let sourceIndex = state.tasks.firstIndex(where: { $0.id == taskID }),
+              let destinationIndex = dragSlotCenters.indices.min(by: {
+                  abs(dragSlotCenters[$0] - updatedCenter) < abs(dragSlotCenters[$1] - updatedCenter)
+              }),
+              destinationIndex != sourceIndex else {
             return
         }
 
-        let draggedCenter = dragStartCenter + value.translation.height
-        let destinationIndex = state.tasks
-            .filter { $0.id != taskID }
-            .compactMap { taskRowFrames[$0.id]?.midY }
-            .filter { $0 < draggedCenter }
-            .count
-        guard destinationIndex != sourceIndex else { return }
-
         let destinationOffset = destinationIndex > sourceIndex ? destinationIndex + 1 : destinationIndex
         withAnimation(.snappy) {
-            state.moveTask(taskID, toOffset: destinationOffset)
+            state.moveTaskDuringDrag(taskID, toOffset: destinationOffset)
         }
+    }
+
+    private func endReorderDrag(for taskID: TaskTimer.ID) {
+        guard draggedTaskID == taskID else { return }
+        withAnimation(.snappy) {
+            draggedTaskID = nil
+            draggedTaskCenter = nil
+            dragPointerOffset = 0
+            dragSlotCenters = []
+        }
+    }
+
+    private func dragOffset(for taskID: TaskTimer.ID) -> CGFloat {
+        guard draggedTaskID == taskID,
+              let draggedTaskCenter,
+              let taskFrame = taskRowFrames[taskID] else { return 0 }
+        return draggedTaskCenter - taskFrame.midY
     }
 
     private func headerButton(
@@ -196,10 +202,11 @@ private struct TaskTimerRow: View {
     let isSelected: Bool
     @ObservedObject var state: TimerState
     let onReorderDragChanged: (DragGesture.Value) -> Void
-    let onReorderDragEnded: (DragGesture.Value) -> Void
+    let onReorderDragFinished: () -> Void
 
     @State private var timeEditorText = ""
     @State private var isHovered = false
+    @GestureState private var isReorderGestureActive = false
     @FocusState private var isTimeEditorFocused: Bool
 
     var body: some View {
@@ -271,9 +278,17 @@ private struct TaskTimerRow: View {
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 2, coordinateSpace: .named(taskListCoordinateSpace))
+                    .updating($isReorderGestureActive) { _, isActive, _ in
+                        isActive = true
+                    }
                     .onChanged(onReorderDragChanged)
-                    .onEnded(onReorderDragEnded)
+                    .onEnded { _ in onReorderDragFinished() }
             )
+            .onChange(of: isReorderGestureActive) { wasActive, isActive in
+                if wasActive, !isActive {
+                    onReorderDragFinished()
+                }
+            }
             .help("Drag to reorder")
             .accessibilityLabel("Reorder \(displayTitle)")
             .accessibilityAction(named: "Move up") {

@@ -221,6 +221,10 @@ final class TimerState: ObservableObject {
         moveTasks(fromOffsets: IndexSet(integer: sourceIndex), toOffset: boundedOffset)
     }
 
+    func moveTaskDuringDrag(_ id: TaskTimer.ID, toOffset destinationOffset: Int) {
+        moveTask(id, toOffset: destinationOffset)
+    }
+
     func moveTasks(fromOffsets sourceOffsets: IndexSet, toOffset destinationOffset: Int) {
         guard !sourceOffsets.isEmpty,
               sourceOffsets.allSatisfy({ tasks.indices.contains($0) }) else { return }
