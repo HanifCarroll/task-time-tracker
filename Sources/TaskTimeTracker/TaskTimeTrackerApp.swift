@@ -28,6 +28,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.workLogStore = workLogStore
         self.windowController = windowController
         self.statusBarController = StatusBarController(state: state, windowController: windowController)
+        windowController.show()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        windowController?.show()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {

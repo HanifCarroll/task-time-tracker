@@ -71,6 +71,7 @@ cat >"$CONTENTS_DIR/PkgInfo" <<PKGINFO
 APPL????
 PKGINFO
 
+/usr/bin/codesign --force --sign - "$BUNDLE_PATH"
 /usr/bin/mdimport "$BUNDLE_PATH" >/dev/null 2>&1 || true
 
 if ((WAS_RUNNING)); then
