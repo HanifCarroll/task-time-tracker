@@ -157,7 +157,7 @@ final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowD
         saveSize(panel.contentRect(forFrameRect: panel.frame).size)
     }
 
-    private func makePanel() -> NSPanel {
+    func makePanel() -> NSPanel {
         let size = savedSize()
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
@@ -169,7 +169,9 @@ final class FloatingTimerWindowController: NSObject, ObservableObject, NSWindowD
         panel.title = "Task Time Tracker"
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
+        // Keep content drags available to controls such as the task reorder grip.
+        // The standard title bar remains the dedicated window-drag region.
+        panel.isMovableByWindowBackground = false
         panel.contentMinSize = FloatingTimerWindowSizing.minimumSize
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]

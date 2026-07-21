@@ -261,6 +261,17 @@ final class TimerStateTests: XCTestCase {
     }
 
     @MainActor
+    func testTimerPanelReservesContentDragsForControls() {
+        let state = TimerState(tasks: [TaskTimer(title: "First")])
+        let controller = FloatingTimerWindowController(state: state)
+        let panel = controller.makePanel()
+
+        XCTAssertTrue(panel.isMovable)
+        XCTAssertTrue(panel.styleMask.contains(.titled))
+        XCTAssertFalse(panel.isMovableByWindowBackground)
+    }
+
+    @MainActor
     private func makeTemporaryStore() throws -> WorkLogStore {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
