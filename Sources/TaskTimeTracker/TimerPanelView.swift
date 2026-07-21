@@ -643,8 +643,7 @@ private struct TaskTitleEditField: NSViewRepresentable {
         textField.cell?.wraps = false
         textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         context.coordinator.textField = textField
-        context.coordinator.installOutsideClickMonitors()
-        focus(textField)
+        focus(textField, coordinator: context.coordinator)
         return textField
     }
 
@@ -652,7 +651,6 @@ private struct TaskTitleEditField: NSViewRepresentable {
         context.coordinator.text = $text
         context.coordinator.onCommit = onCommit
         context.coordinator.textField = textField
-        context.coordinator.installOutsideClickMonitors()
 
         if textField.stringValue != text {
             textField.stringValue = text
@@ -663,10 +661,14 @@ private struct TaskTitleEditField: NSViewRepresentable {
         coordinator.removeOutsideClickMonitors()
     }
 
-    private func focus(_ textField: NSTextField) {
+    private func focus(_ textField: NSTextField, coordinator: Coordinator) {
         DispatchQueue.main.async {
-            guard textField.currentEditor() == nil else { return }
-            textField.window?.makeFirstResponder(textField)
+            NSApp.activate(ignoringOtherApps: true)
+            textField.window?.makeKey()
+            if textField.currentEditor() == nil {
+                guard textField.window?.makeFirstResponder(textField) == true else { return }
+            }
+            coordinator.installOutsideClickMonitors()
         }
     }
 
