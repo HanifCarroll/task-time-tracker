@@ -231,7 +231,7 @@ final class TimerStateTests: XCTestCase {
     }
 
     @MainActor
-    func testDragMovePersistsAtEachRowCrossing() throws {
+    func testCommittedDragOrderPersistsOnceTheDragFinishes() throws {
         let store = try makeTemporaryStore()
         let tasks = [
             TaskTimer(title: "First"),
@@ -240,10 +240,63 @@ final class TimerStateTests: XCTestCase {
         ]
         let state = TimerState(tasks: tasks, workLogStore: store)
 
-        state.moveTaskDuringDrag(tasks[2].id, toOffset: 0)
+        state.commitTaskOrder([tasks[2].id, tasks[0].id, tasks[1].id])
 
         XCTAssertEqual(state.tasks.map(\.id), [tasks[2].id, tasks[0].id, tasks[1].id])
         XCTAssertEqual(try store.loadCurrentTasks().map(\.id), state.tasks.map(\.id))
+    }
+
+    func testReorderDragUsesHysteresisAroundRowBoundary() {
+        let centers: [CGFloat] = [0, 34]
+
+        XCTAssertEqual(
+            TaskReorderDragLayout.destinationIndex(
+                currentIndex: 0,
+                draggedCenter: 22.9,
+                slotCenters: centers
+            ),
+            0
+        )
+        XCTAssertEqual(
+            TaskReorderDragLayout.destinationIndex(
+                currentIndex: 0,
+                draggedCenter: 23.1,
+                slotCenters: centers
+            ),
+            1
+        )
+        XCTAssertEqual(
+            TaskReorderDragLayout.destinationIndex(
+                currentIndex: 1,
+                draggedCenter: 11.1,
+                slotCenters: centers
+            ),
+            1
+        )
+        XCTAssertEqual(
+            TaskReorderDragLayout.destinationIndex(
+                currentIndex: 1,
+                draggedCenter: 10.9,
+                slotCenters: centers
+            ),
+            0
+        )
+    }
+
+    func testReorderDragCompensatesForRowsCrossedDuringLivePreview() {
+        let draggedID = UUID()
+        let crossedID = UUID()
+        let order = [crossedID, draggedID]
+
+        XCTAssertEqual(
+            TaskReorderDragLayout.positionCompensation(
+                initialIndex: 0,
+                currentIndex: 1,
+                order: order,
+                rowSpans: [crossedID: 39, draggedID: 34]
+            ),
+            -39
+        )
     }
 
     @MainActor

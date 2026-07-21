@@ -221,10 +221,6 @@ final class TimerState: ObservableObject {
         moveTasks(fromOffsets: IndexSet(integer: sourceIndex), toOffset: boundedOffset)
     }
 
-    func moveTaskDuringDrag(_ id: TaskTimer.ID, toOffset destinationOffset: Int) {
-        moveTask(id, toOffset: destinationOffset)
-    }
-
     func moveTasks(fromOffsets sourceOffsets: IndexSet, toOffset destinationOffset: Int) {
         guard !sourceOffsets.isEmpty,
               sourceOffsets.allSatisfy({ tasks.indices.contains($0) }) else { return }
@@ -243,6 +239,20 @@ final class TimerState: ObservableObject {
 
         tasks = updatedTasks
         persist { try workLogStore?.updateTaskOrder(updatedTasks.map(\.id)) }
+    }
+
+    func commitTaskOrder(_ orderedTaskIDs: [TaskTimer.ID]) {
+        let currentTaskIDs = tasks.map(\.id)
+        guard orderedTaskIDs.count == currentTaskIDs.count,
+              Set(orderedTaskIDs) == Set(currentTaskIDs),
+              orderedTaskIDs != currentTaskIDs else { return }
+
+        let tasksByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+        let updatedTasks = orderedTaskIDs.compactMap { tasksByID[$0] }
+        guard updatedTasks.count == tasks.count else { return }
+
+        tasks = updatedTasks
+        persist { try workLogStore?.updateTaskOrder(orderedTaskIDs) }
     }
 
     func moveTaskUp(_ id: TaskTimer.ID) {
